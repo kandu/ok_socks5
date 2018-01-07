@@ -1,0 +1,10 @@
+(jbuild_version 1)
+
+(library
+ ((name ok_socks5)
+  (public_name ok_socks5)
+  (flags (:standard -safe-string))
+  (synopsis "implementation of socks5 protocol")
+  (libraries (core_kernel ok_parsec))
+  ))
+

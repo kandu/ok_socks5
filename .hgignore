@@ -1,0 +1,17 @@
+syntax: glob
+
+**/*.annot
+
+**/.\#*
+**/*~
+**/Session.vim
+**/.*.swp
+
+**/*.o
+**/*.a
+**/*.so
+**/*.cm*
+_build
+.merlin
+ok_socks5.install
+
