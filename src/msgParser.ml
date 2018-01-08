@@ -3,11 +3,19 @@ open Ok_parsec
 open Parsec
 open Msg
 
-let ver= char '\x05'
+let ver_socks= char '\x05'
 let meth_num= int8
-let meth= int8
+let meth= int8 |>> meth_of_bin
 
 let rsv= char '\x00'
+
+let plen8Str= int8
+  >>= fun len-> times len any
+  |>> String.of_char_list
+
+let plen16Str= int16
+  >>= fun len-> times len any
+  |>> String.of_char_list
 
 let methods n= times n meth
 
@@ -95,17 +103,22 @@ let dstPort= int16_net
 
 (**************************************************************************)
 
-let p_method_req= ver >> meth_num >>= methods
-let p_method_rep= ver >> meth
+(* auth method *)
+let ver_auth_userpswd= char '\x01'
+
+(**************************************************************************)
+
+let p_method_req= ver_socks >> meth_num >>= methods
+let p_method_rep= ver_socks >> meth
 
 
-let p_request_req= ver >> cmd
+let p_request_req= ver_socks >> cmd
   >>= fun cmd-> rsv >> addr
   >>= fun addr-> dstPort
   >>= fun port->
     return (cmd, addr, port)
 
-let p_request_rep= ver >> rep
+let p_request_rep= ver_socks >> rep
   >>= fun rep-> rsv >> addr
   >>= fun addr-> dstPort
   >>= fun port->
@@ -118,4 +131,14 @@ let p_udp_datagram= rsv >> rsv >> int8
   >>= fun port-> many any |>> String.of_char_list
   >>= fun data->
   return (frag, addr, port, data)
+
+
+(* auth method *)
+
+let p_auth_userpswd_req= ver_auth_userpswd >> plen8Str
+  >>= fun user-> plen8Str
+  >>= fun pswd->
+  return (user, pswd)
+
+let p_auth_userpswd_rep= ver_auth_userpswd >> int8 |>> ((=) 0)
 
