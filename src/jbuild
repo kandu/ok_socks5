@@ -5,6 +5,7 @@
   (public_name ok_socks5)
   (flags (:standard -safe-string))
   (synopsis "implementation of socks5 protocol")
-  (libraries (core_kernel ok_parsec))
+  (libraries (core ok_parsec lwt.unix ctypes.foreign))
+  (preprocess (pps (lwt.ppx -no-sequence ppx_lwts ppx_ok_monad)))
   ))
 
