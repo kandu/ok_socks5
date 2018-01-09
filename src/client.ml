@@ -23,7 +23,7 @@ let authHandler_userpswd user pswd=
         fail_with "username/password invalid"
     | _-> fail_with "unsupported method"
 
-let connect ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
+let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   ~(socks5:Lwt_unix.sockaddr) ~(dst:socksAddr)=
   let domain= Unix.domain_of_sockaddr socks5 in
   let sock= Lwt_unix.(socket domain SOCK_STREAM 0) in
@@ -43,7 +43,22 @@ let connect ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
         >|= ignore;
       let%lwt r= MsgParser.p_request_rep ps in
       let%m[@PL] ((req, addr, port), ps)= r in
-      return (req, addr, port)
+      return (req, addr, port, ps)
     end;
+  end
+
+let connect ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
+  ~(socks5:Lwt_unix.sockaddr) ~(dst:socksAddr)=
+  streamCommon ~methods ~auth ~socks5 ~dst
+
+
+let bind ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
+  ~(socks5:Lwt_unix.sockaddr) ~(dst:socksAddr) ~notifier=
+  let%lwt (req_s, addr_s, port_s, ps)= streamCommon ~methods ~auth ~socks5 ~dst in
+  begin%lwts
+    notifier req_s addr_s port_s;
+    let%lwt r= MsgParser.p_request_rep ps in
+    let%m[@PL] ((req_c, addr_c, port_c), ps)= r in
+    return ((req_s, addr_s, port_s), (req_c, addr_c, port_c), ps)
   end
 
