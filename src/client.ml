@@ -96,3 +96,21 @@ let udp_init ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
     end;
   end
 
+let udp_recvfrom sock flags=
+  let bufsize= Int.pow 2 16 in
+  let buf= Bytes.create bufsize in
+  let rec recv ()=
+    let%lwt (len, remoteAddr)=
+      Lwt_unix.recvfrom sock buf 0 bufsize flags
+    in
+    let datagram= Bytes.sub buf 0 len |> Bytes.to_string in
+    let%lwt r= Parsec.parse_string MsgParser.p_udp_datagram datagram in
+    let%m[@PL] ((frag, addr, port, data), ps)= r in
+    if frag = 0 then
+      return (addr, port, data)
+    else
+      (* udp frag is no supported, drop the datagram silently *)
+      recv ()
+  in
+  recv
+
