@@ -33,7 +33,7 @@ type cmd=
   | Cmd_connect
   | Cmd_bind
   | Cmd_udp
-  [@@deriving show, sexp]
+  [@@deriving show]
 
 let cmd_to_bin cmd=
   char_of_int
@@ -95,6 +95,7 @@ type rep=
   | CommandNotSupported
   | AddressTypeNotSupported
   | Unassigned
+  [@@deriving show]
 
 let rep_to_bin rep=
   char_of_int

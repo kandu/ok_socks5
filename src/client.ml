@@ -24,7 +24,7 @@ let authHandler_userpswd user pswd=
     | _-> fail_with "unsupported method"
 
 let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
-  ~(socks5:Lwt_unix.sockaddr) ~(dst:socksAddr)=
+  ~(socks5:Lwt_unix.sockaddr) ~(socksAddr:socksAddr)=
   let domain= Unix.domain_of_sockaddr socks5 in
   let sock= Lwt_unix.(socket domain SOCK_STREAM 0) in
   let ps= Common.initState (Common.Fd sock) in
@@ -39,26 +39,60 @@ let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
 
     begin%lwts
       fd_write_string sock
-        (Msg.request_req Msg.Cmd_connect dst.addr dst.port)
+        (Msg.request_req Msg.Cmd_connect socksAddr.addr socksAddr.port)
         >|= ignore;
       let%lwt r= MsgParser.p_request_rep ps in
-      let%m[@PL] ((req, addr, port), ps)= r in
-      return (req, addr, port, ps)
+      let%m[@PL] ((rep, addr, port), ps)= r in
+      if rep = Msg.Succeeded then
+        return (sock, addr, port, ps)
+      else
+        Lwt.fail_with (Msg.show_rep rep)
     end;
   end
 
 let connect ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
-  ~(socks5:Lwt_unix.sockaddr) ~(dst:socksAddr)=
-  streamCommon ~methods ~auth ~socks5 ~dst
+  ~socks5 ~dst=
+  streamCommon ~methods ~auth ~socks5 ~socksAddr:dst
 
 
 let bind ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
-  ~(socks5:Lwt_unix.sockaddr) ~(dst:socksAddr) ~notifier=
-  let%lwt (req_s, addr_s, port_s, ps)= streamCommon ~methods ~auth ~socks5 ~dst in
+  ~socks5 ~listen ~notifier=
+  let%lwt (sock, addr_s, port_s, ps)=
+    streamCommon ~methods ~auth ~socks5 ~socksAddr:listen in
   begin%lwts
-    notifier req_s addr_s port_s;
+    notifier addr_s port_s;
     let%lwt r= MsgParser.p_request_rep ps in
-    let%m[@PL] ((req_c, addr_c, port_c), ps)= r in
-    return ((req_s, addr_s, port_s), (req_c, addr_c, port_c), ps)
+    let%m[@PL] ((rep, addr_c, port_c), ps)= r in
+    if rep = Msg.Succeeded then
+      return (sock, (addr_s, port_s), (addr_c, port_c), ps)
+    else
+      Lwt.fail_with (Msg.show_rep rep)
+  end
+
+let udp_init ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
+  ~socks5 ~local=
+  let domain= Unix.domain_of_sockaddr socks5 in
+  let sock= Lwt_unix.(socket domain SOCK_STREAM 0) in
+  let ps= Common.initState (Common.Fd sock) in
+  begin%lwts
+    Lwt_unix.connect sock socks5;
+
+    fd_write_string sock (Msg.method_req methods) >|= ignore;
+    let%lwt r= MsgParser.p_method_rep ps in
+    let%m[@PL] (meth, ps)= r in
+
+    let%lwt ps= auth sock ps meth in
+
+    begin%lwts
+      fd_write_string sock
+        (Msg.request_req Msg.Cmd_udp local.addr local.port)
+        >|= ignore;
+      let%lwt r= MsgParser.p_request_rep ps in
+      let%m[@PL] ((rep, addr, port), ps)= r in
+      if rep = Msg.Succeeded then
+        return (sock, addr, port, ps)
+      else
+        Lwt.fail_with (Msg.show_rep rep)
+    end;
   end
 
