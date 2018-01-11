@@ -24,7 +24,7 @@ let authHandler_userpswd user pswd=
     | _-> fail_with "unsupported method"
 
 let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
-  ~(socks5:Lwt_unix.sockaddr) ~(socksAddr:socksAddr)=
+  ~(socks5:Lwt_unix.sockaddr) ~(dst:socksAddr)=
   let domain= Unix.domain_of_sockaddr socks5 in
   let sock= Lwt_unix.(socket domain SOCK_STREAM 0) in
   let ps= Common.initState (Common.Fd sock) in
@@ -39,7 +39,7 @@ let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
 
     begin%lwts
       fd_write_string sock
-        (Msg.request_req Msg.Cmd_connect socksAddr.addr socksAddr.port)
+        (Msg.request_req Msg.Cmd_connect dst.addr dst.port)
         >|= ignore;
       let%lwt r= MsgParser.p_request_rep ps in
       let%m[@PL] ((rep, addr, port), ps)= r in
@@ -52,13 +52,13 @@ let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
 
 let connect ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   ~socks5 ~dst=
-  streamCommon ~methods ~auth ~socks5 ~socksAddr:dst
+  streamCommon ~methods ~auth ~socks5 ~dst
 
 
 let bind ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
-  ~socks5 ~listen ~notifier=
+  ~socks5 ~dst ~notifier=
   let%lwt (sock, addr_s, port_s, ps)=
-    streamCommon ~methods ~auth ~socks5 ~socksAddr:listen in
+    streamCommon ~methods ~auth ~socks5 ~dst in
   begin%lwts
     notifier addr_s port_s;
     let%lwt r= MsgParser.p_request_rep ps in
@@ -103,7 +103,7 @@ let udp_recvfrom sock flags=
     let%lwt (len, remoteAddr)=
       Lwt_unix.recvfrom sock buf 0 bufsize flags
     in
-    let datagram= Bytes.sub buf 0 len |> Bytes.to_string in
+    let datagram= Caml.Bytes.sub buf 0 len |> Caml.Bytes.to_string in
     let%lwt r= Parsec.parse_string MsgParser.p_udp_datagram datagram in
     let%m[@PL] ((frag, addr, port, data), ps)= r in
     if frag = 0 then
@@ -113,4 +113,12 @@ let udp_recvfrom sock flags=
       recv ()
   in
   recv
+
+let udp_sendto sock relay flags=
+  let send msg=
+    let buf= Caml.Bytes.of_string msg in
+    let len= String.length msg in
+    Lwt_unix.sendto sock buf 0 len flags relay
+  in
+  send
 
