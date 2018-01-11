@@ -19,6 +19,38 @@ type socksAddr= {
 let fd_write_string fd str=
   Lwt_unix.write_string fd str 0 (String.length str)
 
+
+let list_random_element l=
+  let len= List.length l in
+  if len > 0 then
+    let i= Random.int len in
+    Some (List.nth_exn l i)
+  else
+    None
+
+let getIp_of_url url=
+  let%lwt addrs= Lwt_unix.getaddrinfo
+    url
+    ""
+    []
+  in
+  Lwt.return
+    (List.filter_map addrs
+      ~f:(fun addr-> match addr.Unix.ai_addr with
+        | Unix.ADDR_INET (ip,_)-> Some ip
+        | Unix.ADDR_UNIX _-> None)
+    |> list_random_element)
+
+let getIp_of_addr addr=
+  let open Lwt in
+  match addr with
+  | Msg.Ipv4 ip-> return ip
+  | Msg.Ipv6 ip-> return ip
+  | Msg.DomainName url->
+    let%lwt ip= getIp_of_url url in
+    Lwt.wrap1 (fun v-> Option.value_exn v) ip
+
+
 open Ctypes
 open Foreign
 
