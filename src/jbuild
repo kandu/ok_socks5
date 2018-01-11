@@ -6,6 +6,6 @@
   (flags (:standard -safe-string))
   (synopsis "implementation of socks5 protocol")
   (libraries (core ok_parsec lwt.unix ctypes.foreign ppx_deriving.runtime))
-  (preprocess (pps (lwt.ppx -no-sequence ppx_lwts ppx_ok_monad ppx_deriving.std)))
+  (preprocess (pps (lwt.ppx -no-sequence ppx_ok_lwt ppx_ok_monad ppx_deriving.std)))
   ))
 

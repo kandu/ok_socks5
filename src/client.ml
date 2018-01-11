@@ -70,7 +70,7 @@ let bind ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   end
 
 let udp_init ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
-  ~socks5 ~local=
+  ~socks5 ~dst=
   let domain= Unix.domain_of_sockaddr socks5 in
   let sock= Lwt_unix.(socket domain SOCK_STREAM 0) in
   let ps= Common.initState (Common.Fd sock) in
@@ -85,7 +85,7 @@ let udp_init ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
 
     begin%lwts
       fd_write_string sock
-        (Msg.request_req Msg.Cmd_udp local.addr local.port)
+        (Msg.request_req Msg.Cmd_udp dst.addr dst.port)
         >|= ignore;
       let%lwt r= MsgParser.p_request_rep ps in
       let%m[@PL] ((rep, addr, port), ps)= r in
@@ -121,4 +121,20 @@ let udp_sendto sock relay flags=
     Lwt_unix.sendto sock buf 0 len flags relay
   in
   send
+
+let udp ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
+  ~socks5 ~dst ~local=
+  let%lwt (sock_relay, addr, port, ps)=
+    udp_init ~methods ~auth ~socks5 ~dst in
+  let terminator ()= Lwt_unix.close sock_relay in
+  let domain= Unix.domain_of_sockaddr local in
+  let sock_udp= Lwt_unix.(socket domain SOCK_DGRAM 0) in
+  let recv= udp_recvfrom sock_udp [] in
+  let%lwt relay_ip= getIp_of_addr addr in
+  let relay_addr= Unix.ADDR_INET (relay_ip, port) in
+  let send= udp_sendto sock_udp relay_addr [] in
+  begin%lwts
+    Lwt_unix.bind sock_udp local;
+    return (terminator, recv, send);
+  end
 
