@@ -96,10 +96,10 @@ let udp_init ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
     end;
   end
 
-let udp_recvfrom sock flags=
+let udp_recvfrom sock=
   let bufsize= Int.pow 2 16 in
   let buf= Bytes.create bufsize in
-  let rec recv ()=
+  let rec recv flags=
     let%lwt (len, remoteAddr)=
       Lwt_unix.recvfrom sock buf 0 bufsize flags
     in
@@ -110,29 +110,39 @@ let udp_recvfrom sock flags=
       return (addr, port, data)
     else
       (* udp frag is no supported, drop the datagram silently *)
-      recv ()
+      recv flags
   in
   recv
 
-let udp_sendto sock relay flags=
-  let send msg=
+let udp_sendto sock relay=
+  let send dst msg flags=
+    let msg= Msg.udp_datagram 0 dst.addr dst.port msg in
     let buf= Caml.Bytes.of_string msg in
     let len= String.length msg in
-    Lwt_unix.sendto sock buf 0 len flags relay
+    Lwt_unix.send sock buf 0 len flags
   in
-  send
+  begin%lwts
+    Lwt_unix.connect sock relay;
+    return send;
+  end
+
 
 let udp ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   ~socks5 ~dst ~local=
   let%lwt (sock_relay, addr, port, ps)=
     udp_init ~methods ~auth ~socks5 ~dst in
+
   let terminator ()= Lwt_unix.close sock_relay in
+
   let domain= Unix.domain_of_sockaddr local in
   let sock_udp= Lwt_unix.(socket domain SOCK_DGRAM 0) in
-  let recv= udp_recvfrom sock_udp [] in
+
+  let recv= udp_recvfrom sock_udp in
+
   let%lwt relay_ip= getIp_of_addr addr in
   let relay_addr= Unix.ADDR_INET (relay_ip, port) in
-  let send= udp_sendto sock_udp relay_addr [] in
+  let send= udp_sendto sock_udp relay_addr in
+
   begin%lwts
     Lwt_unix.bind sock_udp local;
     return (terminator, recv, send);
