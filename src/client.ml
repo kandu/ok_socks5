@@ -28,27 +28,33 @@ let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   let domain= Unix.domain_of_sockaddr socks5 in
   let sock= Lwt_unix.(socket domain SOCK_STREAM 0) in
   let ps= Common.initState (Common.Fd sock) in
-  begin%lwts
-    Lwt_unix.connect sock socks5;
-
-    fd_write_string sock (Msg.method_req methods) >|= ignore;
-    let%lwt r= MsgParser.p_method_rep ps in
-    let%m[@PL] (meth, ps)= r in
-
-    let%lwt ps= auth sock ps meth in
-
+  try%lwt
     begin%lwts
-      fd_write_string sock
-        (Msg.request_req Msg.Cmd_connect dst.addr dst.port)
-        >|= ignore;
-      let%lwt r= MsgParser.p_request_rep ps in
-      let%m[@PL] ((rep, addr, port), ps)= r in
-      if rep = Msg.Succeeded then
-        return (sock, addr, port, ps)
-      else
-        Lwt.fail_with (Msg.show_rep rep)
-    end;
-  end
+      Lwt_unix.connect sock socks5;
+
+      fd_write_string sock (Msg.method_req methods) >|= ignore;
+      let%lwt r= MsgParser.p_method_rep ps in
+      let%m[@PL] (meth, ps)= r in
+
+      let%lwt ps= auth sock ps meth in
+
+      begin%lwts
+        fd_write_string sock
+          (Msg.request_req Msg.Cmd_connect dst.addr dst.port)
+          >|= ignore;
+        let%lwt r= MsgParser.p_request_rep ps in
+        let%m[@PL] ((rep, addr, port), ps)= r in
+        if rep = Msg.Succeeded then
+          return (sock, addr, port, ps)
+        else
+          Lwt.fail_with (Msg.show_rep rep)
+      end;
+    end
+  with exn->
+    begin%lwts
+      Lwt_unix.close sock;
+      Lwt.fail exn;
+    end
 
 let connect ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   ~socks5 ~dst=
@@ -74,27 +80,33 @@ let udp_init ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   let domain= Unix.domain_of_sockaddr socks5 in
   let sock= Lwt_unix.(socket domain SOCK_STREAM 0) in
   let ps= Common.initState (Common.Fd sock) in
-  begin%lwts
-    Lwt_unix.connect sock socks5;
-
-    fd_write_string sock (Msg.method_req methods) >|= ignore;
-    let%lwt r= MsgParser.p_method_rep ps in
-    let%m[@PL] (meth, ps)= r in
-
-    let%lwt ps= auth sock ps meth in
-
+  try%lwt
     begin%lwts
-      fd_write_string sock
-        (Msg.request_req Msg.Cmd_udp dst.addr dst.port)
-        >|= ignore;
-      let%lwt r= MsgParser.p_request_rep ps in
-      let%m[@PL] ((rep, addr, port), ps)= r in
-      if rep = Msg.Succeeded then
-        return (sock, addr, port, ps)
-      else
-        Lwt.fail_with (Msg.show_rep rep)
-    end;
-  end
+      Lwt_unix.connect sock socks5;
+
+      fd_write_string sock (Msg.method_req methods) >|= ignore;
+      let%lwt r= MsgParser.p_method_rep ps in
+      let%m[@PL] (meth, ps)= r in
+
+      let%lwt ps= auth sock ps meth in
+
+      begin%lwts
+        fd_write_string sock
+          (Msg.request_req Msg.Cmd_udp dst.addr dst.port)
+          >|= ignore;
+        let%lwt r= MsgParser.p_request_rep ps in
+        let%m[@PL] ((rep, addr, port), ps)= r in
+        if rep = Msg.Succeeded then
+          return (sock, addr, port, ps)
+        else
+          Lwt.fail_with (Msg.show_rep rep)
+      end;
+    end
+  with exn->
+    begin%lwts
+      Lwt_unix.close sock;
+      Lwt.fail exn;
+    end
 
 let udp_recvfrom sock=
   let bufsize= Int.pow 2 16 in
@@ -137,14 +149,21 @@ let udp ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   let domain= Unix.domain_of_sockaddr local in
   let sock_udp= Lwt_unix.(socket domain SOCK_DGRAM 0) in
 
-  let recv= udp_recvfrom sock_udp in
+  try%lwt
+    let recv= udp_recvfrom sock_udp in
 
-  let%lwt relay_ip= getIp_of_addr addr in
-  let relay_addr= Unix.ADDR_INET (relay_ip, port) in
-  let send= udp_sendto sock_udp relay_addr in
+    let%lwt relay_ip= getIp_of_addr addr in
+    let relay_addr= Unix.ADDR_INET (relay_ip, port) in
+    let send= udp_sendto sock_udp relay_addr in
 
-  begin%lwts
-    Lwt_unix.bind sock_udp local;
-    return (terminator, recv, send);
-  end
+    begin%lwts
+      Lwt_unix.bind sock_udp local;
+      return (terminator, recv, send);
+    end
+  with exn->
+    begin%lwts
+      Lwt_unix.close sock_relay;
+      Lwt_unix.close sock_udp;
+      Lwt.fail exn;
+    end
 
