@@ -105,7 +105,10 @@ let addr=
       >>= fun addr-> dstPort
       >>= fun port->
       return (Ipv6 (addr, port))
-    | Atyp_domainName-> dstAddr_domain |>> fun addr-> DomainName addr
+    | Atyp_domainName-> dstAddr_domain
+      >>= fun addr-> dstPort
+      >>= fun port->
+      return (DomainName (addr, port))
 
 
 (**************************************************************************)
@@ -121,23 +124,20 @@ let p_method_rep= ver_socks >> meth
 
 let p_request_req= ver_socks >> cmd
   >>= fun cmd-> rsv >> addr
-  >>= fun addr-> dstPort
-  >>= fun port->
-    return (cmd, addr, port)
+  >>= fun addr->
+    return (cmd, addr)
 
 let p_request_rep= ver_socks >> rep
   >>= fun rep-> rsv >> addr
-  >>= fun addr-> dstPort
-  >>= fun port->
-    return (rep, addr, port)
+  >>= fun addr->
+    return (rep, addr)
 
 
 let p_udp_datagram= rsv >> rsv >> int8
   >>= fun frag-> addr
-  >>= fun addr-> dstPort
-  >>= fun port-> many any |>> String.of_char_list
+  >>= fun addr-> many any |>> String.of_char_list
   >>= fun data->
-  return (frag, addr, port, data)
+  return (frag, addr, data)
 
 
 (* auth method *)

@@ -58,13 +58,13 @@ let atyp_to_bin atyp=
 type addr=
   | Ipv4 of Unix.inet_addr * int
   | Ipv6 of Unix.inet_addr * int
-  | DomainName of string
+  | DomainName of string * int
 
 type port= int
 
 let addr_of_sockaddr sa=
   match sa with
-  | Unix.ADDR_UNIX dm-> DomainName dm
+  | Unix.ADDR_UNIX dm-> failwith "unix domain is not supported"
   | Unix.ADDR_INET (ia, port)->
     match Unix.domain_of_sockaddr sa with
     | Unix.PF_INET-> Ipv4 (ia, port)
@@ -84,10 +84,11 @@ let addr_to_bin addr=
     (atyp_to_bin Atyp_ipv6)
     (inet_addr_to_bin ia)
     (int16_to_net port)
-  | DomainName dn-> sprintf "%c%c%s"
+  | DomainName (dn, port)-> sprintf "%c%c%s%s"
     (atyp_to_bin Atyp_domainName)
     (String.length dn |> char_of_int)
     dn
+    (int16_to_net port)
 
 type rep=
   | Succeeded
