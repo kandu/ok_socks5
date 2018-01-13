@@ -51,6 +51,17 @@ let getIp_of_addr addr=
     Lwt.wrap1 (fun v-> Option.value_exn v) ip
 
 
+let connect_dst socket_type dst=
+  let (addr, port)= dst in
+  let%lwt dst_ip= getIp_of_addr addr in
+  let dst_sockaddr= Unix.ADDR_INET (dst_ip, port) in
+  let domain= Unix.domain_of_sockaddr dst_sockaddr in
+  let sock_dst= Lwt_unix.(socket domain socket_type 0) in
+  begin%lwts
+    Lwt_unix.connect sock_dst dst_sockaddr;
+    Lwt.return sock_dst;
+  end
+
 open Ctypes
 open Foreign
 
