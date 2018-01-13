@@ -32,7 +32,7 @@ let handshake
   let%lwt ps= auth sock ps methods in
 
   let%lwt r= MsgParser.p_request_req ps in
-  let%m[@PL] ((cmd, addr, port), ps)= r in
+  let%m[@PL] ((cmd, addr), ps)= r in
   match cmd with
   | Cmd_connect-> return ()
   | Cmd_bind-> return ()

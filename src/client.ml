@@ -43,9 +43,9 @@ let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
           (Msg.request_req Msg.Cmd_connect dst)
           >|= ignore;
         let%lwt r= MsgParser.p_request_rep ps in
-        let%m[@PL] ((rep, addr, port), ps)= r in
+        let%m[@PL] ((rep, addr), ps)= r in
         if rep = Msg.Succeeded then
-          return (sock, addr, port, ps)
+          return (sock, addr, ps)
         else
           Lwt.fail_with (Msg.show_rep rep)
       end;
@@ -63,14 +63,14 @@ let connect ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
 
 let bind ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   ~socks5 ~dst ~notifier=
-  let%lwt (sock, addr_s, port_s, ps)=
+  let%lwt (sock, addr_s, ps)=
     streamCommon ~methods ~auth ~socks5 ~dst in
   begin%lwts
-    notifier addr_s port_s;
+    notifier addr_s;
     let%lwt r= MsgParser.p_request_rep ps in
-    let%m[@PL] ((rep, addr_c, port_c), ps)= r in
+    let%m[@PL] ((rep, addr_c), ps)= r in
     if rep = Msg.Succeeded then
-      return (sock, (addr_s, port_s), (addr_c, port_c), ps)
+      return (sock, addr_s, addr_c, ps)
     else
       Lwt.fail_with (Msg.show_rep rep)
   end
@@ -95,9 +95,9 @@ let udp_init ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
           (Msg.request_req Msg.Cmd_udp dst)
           >|= ignore;
         let%lwt r= MsgParser.p_request_rep ps in
-        let%m[@PL] ((rep, addr, port), ps)= r in
+        let%m[@PL] ((rep, addr), ps)= r in
         if rep = Msg.Succeeded then
-          return (sock, addr, port, ps)
+          return (sock, addr, ps)
         else
           Lwt.fail_with (Msg.show_rep rep)
       end;
@@ -117,9 +117,9 @@ let udp_recvfrom sock=
     in
     let datagram= Caml.Bytes.sub buf 0 len |> Caml.Bytes.to_string in
     let%lwt r= Parsec.parse_string MsgParser.p_udp_datagram datagram in
-    let%m[@PL] ((frag, addr, port, data), ps)= r in
+    let%m[@PL] ((frag, addr, data), ps)= r in
     if frag = 0 then
-      return (addr, port, data)
+      return (addr, data)
     else
       (* udp frag is no supported, drop the datagram silently *)
       recv flags
@@ -141,7 +141,7 @@ let udp_sendto sock relay=
 
 let udp ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   ~socks5 ~dst ~local=
-  let%lwt (sock_relay, addr, port, ps)=
+  let%lwt (sock_relay, addr, ps)=
     udp_init ~methods ~auth ~socks5 ~dst in
 
   let terminator ()= Lwt_unix.close sock_relay in
@@ -152,8 +152,7 @@ let udp ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   try%lwt
     let recv= udp_recvfrom sock_udp in
 
-    let%lwt relay_ip= getIp_of_addr addr in
-    let relay_addr= Unix.ADDR_INET (relay_ip, port) in
+    let%lwt relay_addr= resolv_addr addr in
     let send= udp_sendto sock_udp relay_addr in
 
     begin%lwts
