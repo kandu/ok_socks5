@@ -34,7 +34,7 @@ let handshake
   let%lwt r= MsgParser.p_request_req ps in
   let%m[@PL] ((cmd, addr), ps)= r in
   match cmd with
-  | Cmd_connect-> return ()
-  | Cmd_bind-> return ()
-  | Cmd_udp-> return ()
+  | Cmd_connect-> connect ps sock addr
+  | Cmd_bind-> return (0, 0)
+  | Cmd_udp-> return (0, 0)
 
