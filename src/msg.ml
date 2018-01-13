@@ -56,29 +56,34 @@ let atyp_to_bin atyp=
     )
 
 type addr=
-  | Ipv4 of Unix.inet_addr
-  | Ipv6 of Unix.inet_addr
+  | Ipv4 of Unix.inet_addr * int
+  | Ipv6 of Unix.inet_addr * int
   | DomainName of string
 
 type port= int
 
-let addr_of_inetAddr ia=
-  match Unix.domain_of_sockaddr (Unix.ADDR_INET (ia,0)) with
-  | Unix.PF_INET-> Ipv4 ia
-  | Unix.PF_INET6-> Ipv6 ia
-  | Unix.PF_UNIX-> failwith "unix domain is not supported"
+let addr_of_sockaddr sa=
+  match sa with
+  | Unix.ADDR_UNIX dm-> DomainName dm
+  | Unix.ADDR_INET (ia, port)->
+    match Unix.domain_of_sockaddr sa with
+    | Unix.PF_INET-> Ipv4 (ia, port)
+    | Unix.PF_INET6-> Ipv6 (ia, port)
+    | Unix.PF_UNIX-> failwith "unix domain is not supported"
 
 let inet_addr_of_bin (bin: string)= (Obj.magic bin: Unix.inet_addr)
 let inet_addr_to_bin (addr: Unix.inet_addr)= (Obj.magic addr: string)
 
 let addr_to_bin addr=
   match addr with
-  | Ipv4 al-> sprintf "%c%s"
+  | Ipv4 (ia, port)-> sprintf "%c%s%s"
     (atyp_to_bin Atyp_ipv4)
-    (inet_addr_to_bin al)
-  | Ipv6 al-> sprintf "%c%s"
+    (inet_addr_to_bin ia)
+    (int16_to_net port)
+  | Ipv6 (ia, port)-> sprintf "%c%s%s"
     (atyp_to_bin Atyp_ipv6)
-    (inet_addr_to_bin al)
+    (inet_addr_to_bin ia)
+    (int16_to_net port)
   | DomainName dn-> sprintf "%c%c%s"
     (atyp_to_bin Atyp_domainName)
     (String.length dn |> char_of_int)
@@ -112,13 +117,6 @@ let rep_to_bin rep=
     | Unassigned-> 9)
 
 
-let rep_request rep addr port=
-  sprintf "%c%c\x00%s%s"
-    ver_socks
-    (rep_to_bin rep)
-    (addr_to_bin addr)
-    (int16_to_net port)
-
 let rep_request_inet rep (inet:Unix.inet_addr) port=
   let inet:string= Obj.magic inet in
   let atyp= if String.length inet = 16 then 4 else 1 in
@@ -140,25 +138,22 @@ let method_req methods=
 
 let method_rep meth= sprintf "%c%c" ver_socks (meth_to_bin meth)
 
-let request_req cmd addr port=
-  sprintf "%c%c\x00%s%s"
+let request_req cmd addr=
+  sprintf "%c%c\x00%s"
     ver_socks
     (cmd_to_bin cmd)
     (addr_to_bin addr)
-    (int16_to_net port)
 
-let request_rep rep addr port=
-  sprintf "%c%c\x00%s%s"
+let request_rep rep addr=
+  sprintf "%c%c\x00%s"
     ver_socks
     (rep_to_bin rep)
     (addr_to_bin addr)
-    (int16_to_net port)
 
-let udp_datagram frag addr port data=
-  sprintf "\x00\x00%c%s%s%s"
+let udp_datagram frag addr data=
+  sprintf "\x00\x00%c%s%s"
     (char_of_int frag)
     (addr_to_bin addr)
-    (int16_to_net port)
     data
 
 let auth_userpswd_req user pswd=

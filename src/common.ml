@@ -11,11 +11,6 @@ module PL = struct
     | Error e-> failwith (parsecErr_to_string e)
 end
 
-type socksAddr= {
-  addr: Msg.addr;
-  port: Msg.port;
-}
-
 let fd_write_string fd str=
   Lwt_unix.write_string fd str 0 (String.length str)
 
@@ -48,8 +43,8 @@ let getIp_of_url url=
 let getIp_of_addr addr=
   let open Lwt in
   match addr with
-  | Msg.Ipv4 ip-> return ip
-  | Msg.Ipv6 ip-> return ip
+  | Msg.Ipv4 (ip,_)-> return ip
+  | Msg.Ipv6 (ip,_)-> return ip
   | Msg.DomainName url->
     let%lwt ip= getIp_of_url url in
     Lwt.wrap1 (fun v-> Option.value_exn v) ip
