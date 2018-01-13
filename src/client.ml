@@ -24,7 +24,7 @@ let authHandler_userpswd user pswd=
     | _-> fail_with "unsupported method"
 
 let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
-  ~(socks5:Lwt_unix.sockaddr) ~(dst:socksAddr)=
+  ~(socks5:Lwt_unix.sockaddr) ~(dst:Msg.addr)=
   let domain= Unix.domain_of_sockaddr socks5 in
   let sock= Lwt_unix.(socket domain SOCK_STREAM 0) in
   let ps= Common.initState (Common.Fd sock) in
@@ -40,7 +40,7 @@ let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
 
       begin%lwts
         fd_write_string sock
-          (Msg.request_req Msg.Cmd_connect dst.addr dst.port)
+          (Msg.request_req Msg.Cmd_connect dst)
           >|= ignore;
         let%lwt r= MsgParser.p_request_rep ps in
         let%m[@PL] ((rep, addr, port), ps)= r in
@@ -92,7 +92,7 @@ let udp_init ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
 
       begin%lwts
         fd_write_string sock
-          (Msg.request_req Msg.Cmd_udp dst.addr dst.port)
+          (Msg.request_req Msg.Cmd_udp dst)
           >|= ignore;
         let%lwt r= MsgParser.p_request_rep ps in
         let%m[@PL] ((rep, addr, port), ps)= r in
@@ -128,7 +128,7 @@ let udp_recvfrom sock=
 
 let udp_sendto sock relay=
   let send dst msg flags=
-    let msg= Msg.udp_datagram 0 dst.addr dst.port msg in
+    let msg= Msg.udp_datagram 0 dst msg in
     let buf= Caml.Bytes.of_string msg in
     let len= String.length msg in
     Lwt_unix.send sock buf 0 len flags

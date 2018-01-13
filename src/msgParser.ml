@@ -93,13 +93,20 @@ let dstAddr_domain= int8
   >>= fun len-> times len any
   |>> String.of_char_list
 
+let dstPort= int16_net
+
 let addr=
   atyp >>= function
-    | Atyp_ipv4-> dstAddr_ipv4 |>> fun addr-> Ipv4 addr
-    | Atyp_ipv6-> dstAddr_ipv6 |>> fun addr-> Ipv6 addr
+    | Atyp_ipv4-> dstAddr_ipv4
+      >>= fun addr-> dstPort
+      >>= fun port->
+      return (Ipv4 (addr, port))
+    | Atyp_ipv6-> dstAddr_ipv6
+      >>= fun addr-> dstPort
+      >>= fun port->
+      return (Ipv6 (addr, port))
     | Atyp_domainName-> dstAddr_domain |>> fun addr-> DomainName addr
 
-let dstPort= int16_net
 
 (**************************************************************************)
 
