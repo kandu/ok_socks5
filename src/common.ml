@@ -40,15 +40,6 @@ let getIp_of_url url=
         | Unix.ADDR_UNIX _-> None)
     |> list_random_element)
 
-let getIp_of_addr addr=
-  let open Lwt in
-  match addr with
-  | Msg.Ipv4 (ip,_)-> return ip
-  | Msg.Ipv6 (ip,_)-> return ip
-  | Msg.DomainName (url,_)->
-    let%lwt ip= getIp_of_url url in
-    Lwt.wrap1 (fun v-> Option.value_exn v) ip
-
 let resolv_addr addr=
   let open Lwt in
   match addr with
@@ -72,10 +63,8 @@ let connect_sockaddr socket_type dst=
   end
 
 let connect_socksAddr socket_type dst=
-  let (addr, port)= dst in
-  let%lwt dst_ip= getIp_of_addr addr in
-  let dst_sockaddr= Unix.ADDR_INET (dst_ip, port) in
-  connect_sockaddr socket_type dst_sockaddr
+  let%lwt dst_addr= resolv_addr dst in
+  connect_sockaddr socket_type dst_addr
 
 
 type ioPair= {ic: Lwt_io.input_channel; oc: Lwt_io.output_channel}
