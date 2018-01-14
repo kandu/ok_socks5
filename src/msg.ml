@@ -118,16 +118,6 @@ let rep_to_bin rep=
     | Unassigned-> 9)
 
 
-let rep_request_inet rep (inet:Unix.inet_addr) port=
-  let inet:string= Obj.magic inet in
-  let atyp= if String.length inet = 16 then 4 else 1 in
-  sprintf "%c%c\x00%c%s%s"
-    ver_socks
-    (rep_to_bin rep)
-    (char_of_int atyp)
-    inet
-    (int16_to_net port)
-
 let method_req methods=
   let n= min 255 (List.length methods) in
   let methods= List.take methods n in
