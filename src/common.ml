@@ -76,7 +76,7 @@ let rec write_exactly fd buf pos len=
     write_exactly fd buf (pos+out) (len-out)
   else return ()
 
-let pairStream ?(bufSize=4096) ?ioPair1 ?ioPair2 s1 s2=
+let pairStream ?(bufSize=4096) ?ps1 ?ps2 ?ioPair1 ?ioPair2 s1 s2=
   let open Lwt in
   let cleanBuf ioPair=
     match ioPair with
@@ -113,9 +113,9 @@ let pairStream ?(bufSize=4096) ?ioPair1 ?ioPair2 s1 s2=
     flow ()
   in
   let pairStream ()=
-    let%m remain1= cleanBuf ioPair1 in
-    let%m remain2= cleanBuf ioPair2 in
-    begin%m
+    let%lwt remain1= cleanBuf ioPair1 in
+    let%lwt remain2= cleanBuf ioPair2 in
+    begin%lwts
       choose [flow remain1 s1 s2 flowOut; flow remain2 s2 s1 flowIn];
       return (!flowIn, !flowOut);
     end
