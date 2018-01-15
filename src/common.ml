@@ -78,22 +78,31 @@ let rec write_exactly fd buf pos len=
 
 let pairStream ?(bufSize=4096) ?ps1 ?ps2 ?ioPair1 ?ioPair2 s1 s2=
   let open Lwt in
-  let cleanBuf ioPair=
-    match ioPair with
-    | None-> return Caml.Bytes.empty
-    | Some ioPair->
-      begin%lwts
-        Lwt_io.flush ioPair.oc;
-        Lwt_io.(direct_access ioPair.ic
-         (fun da->
-           let len= da.da_max - da.da_ptr in
-           let buf= Lwt_bytes.(to_bytes
-             (extract da.da_buffer da.da_ptr len))
-           in
-           da.da_ptr <- da.da_ptr + len;
-           return buf
-         ))
-      end
+  let cleanBuf ps ioPair=
+    let%lwt ps=
+      match ps with
+      | None-> return Caml.Bytes.empty
+      | Some ps-> Ok_parsec.Common.getBuffered ~inner:false ps >|=
+          Caml.Bytes.of_string
+    in
+    let%lwt chan=
+      match ioPair with
+      | None-> return Caml.Bytes.empty
+      | Some ioPair->
+        begin%lwts
+          Lwt_io.flush ioPair.oc;
+          Lwt_io.(direct_access ioPair.ic
+          (fun da->
+            let len= da.da_max - da.da_ptr in
+            let buf= Lwt_bytes.(to_bytes
+              (extract da.da_buffer da.da_ptr len))
+            in
+            da.da_ptr <- da.da_ptr + len;
+            return buf
+          ))
+        end
+    in
+    return (Caml.Bytes.cat ps chan)
   in
   let flowIn= ref 0
   and flowOut= ref 0 in
@@ -113,8 +122,8 @@ let pairStream ?(bufSize=4096) ?ps1 ?ps2 ?ioPair1 ?ioPair2 s1 s2=
     flow ()
   in
   let pairStream ()=
-    let%lwt remain1= cleanBuf ioPair1 in
-    let%lwt remain2= cleanBuf ioPair2 in
+    let%lwt remain1= cleanBuf ps1 ioPair1 in
+    let%lwt remain2= cleanBuf ps2 ioPair2 in
     begin%lwts
       choose [flow remain1 s1 s2 flowOut; flow remain2 s2 s1 flowIn];
       return (!flowIn, !flowOut);
