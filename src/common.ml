@@ -11,6 +11,21 @@ module PL = struct
     | Error e-> failwith (parsecErr_to_string e)
 end
 
+let udp_bufsize= Int.pow 2 16
+
+type socksAddr= {
+  addr: Unix.inet_addr;
+  port: int;
+}
+
+let sockaddr_to_socksAddr= function
+  | Unix.ADDR_INET (ia, port)->
+    {
+      addr= ia;
+      port;
+    }
+  | _-> assert false
+
 let fd_write_string fd str=
   Lwt_unix.write_string fd str 0 (String.length str)
 
