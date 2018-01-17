@@ -1,4 +1,5 @@
 open Core_kernel.Std
+open Watchdog
 
 module PL = struct
   let parsecErr_to_string pe=
@@ -44,11 +45,13 @@ let list_random_element l=
   else
     None
 
-let getIp_of_url url=
-  let%lwt addrs= Lwt_unix.getaddrinfo
-    url
-    ""
-    []
+let getIp_of_url ?timeout url=
+  let%lwt addrs=
+    watchdog_timeout ?timeout
+      (Lwt_unix.getaddrinfo
+        url
+        ""
+        [])
   in
   Lwt.return
     (List.filter_map addrs
@@ -57,31 +60,40 @@ let getIp_of_url url=
         | Unix.ADDR_UNIX _-> None)
     |> list_random_element)
 
-let resolv_addr addr=
+let resolv_addr ?timeout addr=
   let open Lwt in
   match addr with
   | Msg.Ipv4 (ip, port)-> return (Unix.ADDR_INET (ip, port))
   | Msg.Ipv6 (ip, port)-> return (Unix.ADDR_INET (ip, port))
   | Msg.DomainName (url, port)->
     let%lwt ip=
-      let%lwt ip= getIp_of_url url in
+      let%lwt ip= getIp_of_url ?timeout url in
       Lwt.wrap1 (fun v-> Option.value_exn v) ip
     in
     return (Unix.ADDR_INET (ip, port))
 
 
-
-let connect_sockaddr socket_type dst=
+let connect_sockaddr ?timeout socket_type dst=
   let domain= Unix.domain_of_sockaddr dst in
   let sock_dst= Lwt_unix.(socket domain socket_type 0) in
   begin%lwts
     Lwt_unix.connect sock_dst dst;
-    Lwt.return sock_dst;
+    (try%lwt
+      begin%lwts
+        watchdog_timeout ?timeout (Lwt_unix.connect sock_dst dst);
+        Lwt.return sock_dst;
+      end
+    with e->
+      begin%lwts
+        force_close sock_dst;
+        Lwt.fail e;
+      end);
   end
 
-let connect_socksAddr socket_type dst=
-  let%lwt dst_addr= resolv_addr dst in
-  connect_sockaddr socket_type dst_addr
+let connect_socksAddr ?timeout socket_type dst=
+  watchdog_timeout ?timeout
+    (let%lwt dst_addr= resolv_addr dst in
+    connect_sockaddr socket_type dst_addr)
 
 
 type ioPair= {ic: Lwt_io.input_channel; oc: Lwt_io.output_channel}
@@ -93,7 +105,7 @@ let rec write_exactly fd buf pos len=
     write_exactly fd buf (pos+out) (len-out)
   else return ()
 
-let pairStream ?(bufSize=4096) ?ps1 ?ps2 ?ioPair1 ?ioPair2 s1 s2=
+let pairStream ?(bufSize=Int.pow 2 14) ?ps1 ?ps2 ?ioPair1 ?ioPair2 s1 s2=
   let open Lwt in
   let cleanBuf ps ioPair=
     let%lwt ps=
@@ -142,7 +154,7 @@ let pairStream ?(bufSize=4096) ?ps1 ?ps2 ?ioPair1 ?ioPair2 s1 s2=
     let%lwt remain1= cleanBuf ps1 ioPair1 in
     let%lwt remain2= cleanBuf ps2 ioPair2 in
     begin%lwts
-      choose [flow remain1 s1 s2 flowOut; flow remain2 s2 s1 flowIn];
+      join [flow remain1 s1 s2 flowOut; flow remain2 s2 s1 flowIn];
       return (!flowIn, !flowOut);
     end
   in
