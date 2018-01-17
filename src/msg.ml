@@ -4,8 +4,8 @@ let int16_to_net a= sprintf "%c%c"
   (a lsr 8 |> char_of_int)
   (a land 0xff |> char_of_int)
 
-let ver_socks= '5'
-let ver_auth_userpswd= '1'
+let ver_socks= '\x05'
+let ver_auth_userpswd= '\x01'
 
 type meth=
   | NoAuth
