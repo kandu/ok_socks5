@@ -126,15 +126,15 @@ let pairStream ?(bufSize=4096) ?ps1 ?ps2 ?ioPair1 ?ioPair2 s1 s2=
   let flow remain s1 s2 record=
     let buf= Bytes.create bufSize in
     let rec flow ()=
-      Lwt_unix.read s1 buf 0 bufSize >>= fun readSize->
+      let%lwt readSize= Lwt_unix.read s1 buf 0 bufSize in
       if readSize > 0 then
         (record:= !record + readSize;
-        write_exactly s2 buf 0 readSize >>= fun ()->
+        Lwt_unix.write s2 buf 0 readSize >>= fun _->
         flow ())
       else
         Lwt_unix.shutdown s2 Lwt_unix.SHUTDOWN_SEND |> return
     in
-    write_exactly s2 remain 0 (Bytes.length remain) >>= fun ()->
+    Lwt_unix.write s2 remain 0 (Bytes.length remain) >>= fun _->
     record:= !record + (Bytes.length remain);
     flow ()
   in
@@ -154,6 +154,13 @@ let pairStream ?(bufSize=4096) ?ps1 ?ps2 ?ioPair1 ?ioPair2 s1 s2=
       force_close s1;
       force_close s2;
     end]
+
+let init ()=
+  begin
+    Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
+    Random.self_init ();
+    Core_kernel.Std.Random.self_init ();
+  end
 
 open Ctypes
 open Foreign
