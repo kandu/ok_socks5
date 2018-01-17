@@ -4,6 +4,8 @@ open Common
 open Ok_parsec
 
 
+module IASet= Core.Std.Unix.Inet_addr.Set [@@ocaml.warning "-3"]
+
 let connect ps sock_cli dst=
   let%lwt sock_dst= connect_socksAddr SOCK_STREAM dst in
   let addr= Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_dst) in
@@ -111,7 +113,7 @@ let udp ps sock_cli socksAddr_proposal=
           else
             let%lwt dst_addr= resolv_addr addr in
             let dst_sA= sockaddr_to_socksAddr dst_addr in
-            let remotes= IASet.add dst_sA.addr remotes in
+            let remotes= IASet.add remotes dst_sA.addr in
             let data= Caml.Bytes.of_string data in
             begin%lwts
               Lwt_unix.sendto sock_relay
@@ -132,7 +134,7 @@ let udp ps sock_cli socksAddr_proposal=
           return remotes
 
       and from_remote ()=
-        if IASet.mem peerAddr.addr remotes then
+        if IASet.mem remotes peerAddr.addr then
           let datagram= Caml.Bytes.of_string
             Msg.(udp_datagram 0 (addr_of_sockaddr peername) data)
           in
