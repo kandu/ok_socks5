@@ -18,13 +18,6 @@ type socksAddr= {
   port: int;
 }
 
-module IA = struct
-  type t= Unix.inet_addr
-  let compare= compare
-end
-
-module IASet = Caml.Set.Make(IA)
-
 let sockaddr_to_socksAddr= function
   | Unix.ADDR_INET (ia, port)->
     {
