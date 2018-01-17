@@ -8,19 +8,20 @@ module IASet= Core.Std.Unix.Inet_addr.Set [@@ocaml.warning "-3"]
 
 let connect ps sock_cli dst=
   let%lwt sock_dst= connect_socksAddr SOCK_STREAM dst in
-  let addr= Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_dst) in
+  (let addr= Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_dst) in
   begin%lwts
     fd_write_string sock_cli (Msg.request_rep Msg.Succeeded addr)
       >|= ignore;
     pairStream ~ps1:ps sock_cli sock_dst;
-  end
+  end)
+  [%lwt.finally force_close sock_dst]
 
 
 let bind ps sock_cli dst=
   let%lwt dst_addr= resolv_addr dst in
   let domain= Unix.domain_of_sockaddr dst_addr in
   let sock_listen= Lwt_unix.(socket domain SOCK_STREAM 0) in
-  let addr_listen=
+  (let addr_listen=
     let open Lwt_unix in
     match domain with
     | PF_INET-> ADDR_INET (Unix.inet_addr_any, 0)
@@ -40,15 +41,17 @@ let bind ps sock_cli dst=
         Lwt_unix.accept sock_listen;
       end
     in
-    begin%lwts
+    (begin%lwts
       fd_write_string sock_cli
         (Msg.request_rep
           Msg.Succeeded
           (Msg.addr_of_sockaddr (Lwt_unix.getpeername sock_dst)))
         >|= ignore;
       pairStream ~ps1:ps sock_cli sock_dst;
-    end;
-  end
+    end)
+    [%lwt.finally force_close sock_dst];
+  end)
+  [%lwt.finally force_close sock_listen]
 
 
 let udp ps sock_cli socksAddr_proposal=
@@ -78,7 +81,7 @@ let udp ps sock_cli socksAddr_proposal=
 
   let domain= Unix.domain_of_sockaddr addr_cli in
   let sock_relay= Lwt_unix.(socket domain SOCK_DGRAM 0) in
-  let addr_relay=
+  (let addr_relay=
     let open Lwt_unix in
     if domain = PF_INET6 then
       ADDR_INET (Unix.inet6_addr_any, 0)
@@ -179,7 +182,8 @@ let udp ps sock_cli socksAddr_proposal=
         (Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_relay)))
       >|= ignore;
     pair ();
-  end
+  end)
+  [%lwt.finally force_close sock_relay]
 
 
 let handshake
