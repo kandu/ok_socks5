@@ -52,7 +52,7 @@ let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
     end
   with exn->
     begin%lwts
-      Lwt_unix.close sock;
+      force_close sock;
       Lwt.fail exn;
     end
 
@@ -104,7 +104,7 @@ let udp_init ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
     end
   with exn->
     begin%lwts
-      Lwt_unix.close sock;
+      force_close sock;
       Lwt.fail exn;
     end
 
@@ -144,10 +144,15 @@ let udp ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   let%lwt (sock_relay, addr, ps)=
     udp_init ~methods ~auth ~socks5 ~dst in
 
-  let terminator ()= Lwt_unix.close sock_relay in
-
   let domain= Unix.domain_of_sockaddr local in
   let sock_udp= Lwt_unix.(socket domain SOCK_DGRAM 0) in
+
+  let terminator ()=
+    begin%lwts
+      force_close sock_relay;
+      force_close sock_udp;
+    end
+  in
 
   try%lwt
     let recv= udp_recvfrom sock_udp in
@@ -161,8 +166,8 @@ let udp ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
     end
   with exn->
     begin%lwts
-      Lwt_unix.close sock_relay;
-      Lwt_unix.close sock_udp;
+      force_close sock_relay;
+      force_close sock_udp;
       Lwt.fail exn;
     end
 
