@@ -66,11 +66,13 @@ let resolv_addr ?timeout addr=
   | Msg.Ipv4 (ip, port)-> return (Unix.ADDR_INET (ip, port))
   | Msg.Ipv6 (ip, port)-> return (Unix.ADDR_INET (ip, port))
   | Msg.DomainName (url, port)->
-    let%lwt ip=
-      let%lwt ip= getIp_of_url ?timeout url in
-      Lwt.wrap1 (fun v-> Option.value_exn v) ip
-    in
-    return (Unix.ADDR_INET (ip, port))
+    try%lwt
+      let%lwt ip=
+        let%lwt ip= getIp_of_url ?timeout url in
+        Lwt.wrap1 (fun v-> Option.value_exn v) ip
+      in
+      return (Unix.ADDR_INET (ip, port))
+    with _-> fail Msg.(Rep NetworkUnreachable)
 
 
 let connect_sockaddr ?timeout socket_type dst=
