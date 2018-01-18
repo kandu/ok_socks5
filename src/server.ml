@@ -186,27 +186,54 @@ let udp ps sock_cli socksAddr_proposal=
   [%lwt.finally force_close sock_relay]
 
 
+let cmd_notSupported ps sock_cli=
+  begin%lwts
+    fd_write_string sock_cli
+      Msg.(request_rep CommandNotSupported anyAddr4)
+      >|= ignore;
+    Lwt.return (0, 0);
+  end
+
+let atyp_notSupported ps sock_cli=
+  begin%lwts
+    fd_write_string sock_cli
+      Msg.(request_rep AddressTypeNotSupported anyAddr4)
+      >|= ignore;
+    Lwt.return (0, 0);
+  end
+
+
 let handshake
   ?(auth= fun sock ps methods->
     if Caml.List.mem Msg.NoAuth methods then
       begin%lwts
         fd_write_string sock (Msg.method_rep Msg.NoAuth) >|= ignore;
-        return ps;
+        return (true, ps);
       end
     else
-      Lwt.fail_with "unsupported methods")
+      begin%lwts
+        cmd_notSupported ps sock >|= ignore;
+        return (false, ps);
+      end)
   ((sock, sockaddr):Lwt_unix.file_descr * Lwt_unix.sockaddr)
   =
   let ps= Common.initState (Common.Fd sock) in
   let%lwt r= MsgParser.p_method_req ps in
   let%m[@PL] (methods, ps)= r in
 
-  let%lwt ps= auth sock ps methods in
+  let%lwt (pass, ps)= auth sock ps methods in
 
-  let%lwt r= MsgParser.p_request_req ps in
-  let%m[@PL] ((cmd, addr), ps)= r in
-  match cmd with
-  | Cmd_connect-> connect ps sock addr
-  | Cmd_bind-> bind ps sock addr
-  | Cmd_udp-> udp ps sock addr
+  if pass then
+    try%lwt
+      let%lwt r= MsgParser.p_request_req ps in
+      let%m[@PL] ((cmd, addr), ps)= r in
+      match cmd with
+      | Cmd_connect-> connect ps sock addr
+      | Cmd_bind-> bind ps sock addr
+      | Cmd_udp-> udp ps sock addr
+      | Cmd_notSupported-> cmd_notSupported ps sock
+    with
+    | Msg.Rep AddressTypeNotSupported-> atyp_notSupported ps sock
+  else
+    return (0, 0)
 

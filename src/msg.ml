@@ -29,10 +29,27 @@ let meth_of_bin bin=
   | 0xff-> NoAcpt
   | _-> sprintf "unkown method %d" bin |> failwith
 
+type rep=
+  | Succeeded
+  | GeneralServerFailure
+  | ConnectionNotAllowed
+  | NetworkUnreachable
+  | HostUnreachable
+  | ConnectionRefused
+  | TtlExpired
+  | CommandNotSupported
+  | AddressTypeNotSupported
+  | Unassigned
+  [@@deriving show]
+
+exception Rep of rep
+
+
 type cmd=
   | Cmd_connect
   | Cmd_bind
   | Cmd_udp
+  | Cmd_notSupported
   [@@deriving show]
 
 let cmd_to_bin cmd=
@@ -40,12 +57,15 @@ let cmd_to_bin cmd=
     (match cmd with
     | Cmd_connect-> 1
     | Cmd_bind-> 2
-    | Cmd_udp-> 3)
+    | Cmd_udp-> 3
+    | Cmd_notSupported-> raise (Rep CommandNotSupported)
+    )
 
 type atyp=
   | Atyp_ipv4
   | Atyp_domainName
   | Atyp_ipv6
+  | Atyp_notSupported
  
 let atyp_to_bin atyp=
   char_of_int
@@ -53,12 +73,16 @@ let atyp_to_bin atyp=
     | Atyp_ipv4-> 1
     | Atyp_domainName-> 3
     | Atyp_ipv6-> 4
+    | Atyp_notSupported-> raise (Rep AddressTypeNotSupported)
     )
 
 type addr=
   | Ipv4 of Unix.inet_addr * int
   | Ipv6 of Unix.inet_addr * int
   | DomainName of string * int
+
+let anyAddr4= Ipv4 (Unix.inet_addr_any, 0)
+let anyAddr6= Ipv6 (Unix.inet6_addr_any, 0)
 
 type port= int
 
@@ -89,19 +113,6 @@ let addr_to_bin addr=
     (String.length dn |> char_of_int)
     dn
     (int16_to_net port)
-
-type rep=
-  | Succeeded
-  | GeneralServerFailure
-  | ConnectionNotAllowed
-  | NetworkUnreachable
-  | HostUnreachable
-  | ConnectionRefused
-  | TtlExpired
-  | CommandNotSupported
-  | AddressTypeNotSupported
-  | Unassigned
-  [@@deriving show]
 
 let rep_to_bin rep=
   char_of_int
