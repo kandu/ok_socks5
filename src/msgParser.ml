@@ -1,4 +1,5 @@
 open Core_kernel.Std
+open Fn
 open Ok_parsec
 open Parsec
 open Msg
@@ -26,6 +27,7 @@ let cmd=
   cmd_connect
   <|> cmd_bind
   <|> cmd_udp
+  <|> (any >>$ Cmd_notSupported)
 
 
 let rep_succeeded=
@@ -78,6 +80,7 @@ let atyp_ipv6= char '\x04' >>$ Atyp_ipv6
 let atyp= atyp_ipv4
   <|> atyp_domainName
   <|> atyp_ipv6
+  <|> (any >>$ Atyp_notSupported)
 
 (* let dstAddr_ipv4= times 4 int8 *)
 let dstAddr_ipv4= times 4 any
@@ -109,6 +112,7 @@ let addr=
       >>= fun addr-> dstPort
       >>= fun port->
       return (DomainName (addr, port))
+    | Atyp_notSupported-> fun _-> Lwt.fail (Rep AddressTypeNotSupported)
 
 
 (**************************************************************************)
