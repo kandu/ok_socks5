@@ -2,22 +2,72 @@ open Core_kernel.Std
 open Lwt
 open Common
 open Ok_parsec
+open Watchdog
 
 
 module IASet= Core.Std.Unix.Inet_addr.Set [@@ocaml.warning "-3"]
 
-let connect ps sock_cli dst=
-  let%lwt sock_dst= connect_socksAddr SOCK_STREAM dst in
-  (let addr= Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_dst) in
+
+let cmd_notSupported ps sock_cli=
   begin%lwts
-    fd_write_string sock_cli (Msg.request_rep Msg.Succeeded addr)
+    fd_write_string sock_cli
+      Msg.(request_rep CommandNotSupported anyAddr4)
       >|= ignore;
-    pairStream ~ps1:ps sock_cli sock_dst;
-  end)
-  [%lwt.finally force_close sock_dst]
+    Lwt.return (0, 0);
+  end
+
+let atyp_notSupported ps sock_cli=
+  begin%lwts
+    fd_write_string sock_cli
+      Msg.(request_rep AddressTypeNotSupported anyAddr4)
+      >|= ignore;
+    Lwt.return (0, 0);
+  end
+
+let hostUnreachable ps sock_cli=
+  begin%lwts
+    fd_write_string sock_cli
+      Msg.(request_rep HostUnreachable anyAddr4)
+      >|= ignore;
+    Lwt.return (0, 0);
+  end
+
+let connectionRefused ps sock_cli=
+  begin%lwts
+    fd_write_string sock_cli
+      Msg.(request_rep ConnectionRefused anyAddr4)
+      >|= ignore;
+    Lwt.return (0, 0);
+  end
+
+let networkUnreachable ps sock_cli=
+  begin%lwts
+    fd_write_string sock_cli
+      Msg.(request_rep NetworkUnreachable anyAddr4)
+      >|= ignore;
+    Lwt.return (0, 0);
+  end
 
 
-let bind ps sock_cli dst=
+let connect ?timeout ps sock_cli dst=
+  try%lwt
+    let%lwt sock_dst= watchdog_timeout ?timeout
+      (connect_socksAddr SOCK_STREAM dst) in
+    (let addr= Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_dst) in
+    begin%lwts
+      fd_write_string sock_cli (Msg.request_rep Msg.Succeeded addr)
+        >|= ignore;
+      pairStream ~ps1:ps sock_cli sock_dst;
+    end)
+    [%lwt.finally force_close sock_dst]
+  with
+  | Watchdog Timeout-> hostUnreachable ps sock_cli
+  | Unix.Unix_error (ENETUNREACH, f, p)-> hostUnreachable ps sock_cli
+  | Unix.Unix_error (ECONNREFUSED, f, p)-> connectionRefused ps sock_cli
+  | Msg.Rep NetworkUnreachable-> networkUnreachable ps sock_cli
+
+
+let bind ?timeout ps sock_cli dst=
   let%lwt dst_addr= resolv_addr dst in
   let domain= Unix.domain_of_sockaddr dst_addr in
   let sock_listen= Lwt_unix.(socket domain SOCK_STREAM 0) in
@@ -35,21 +85,24 @@ let bind ps sock_cli dst=
         Msg.Succeeded
         (Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_listen)))
       >|= ignore;
-    let%lwt (sock_dst, dst_addr)=
-      begin
-        Lwt_unix.listen sock_listen 1;
-        Lwt_unix.accept sock_listen;
-      end
-    in
-    (begin%lwts
-      fd_write_string sock_cli
-        (Msg.request_rep
-          Msg.Succeeded
-          (Msg.addr_of_sockaddr (Lwt_unix.getpeername sock_dst)))
-        >|= ignore;
-      pairStream ~ps1:ps sock_cli sock_dst;
-    end)
-    [%lwt.finally force_close sock_dst];
+    (try%lwt
+      let%lwt (sock_dst, dst_addr)=
+        watchdog_timeout ?timeout
+          begin
+            Lwt_unix.listen sock_listen 1;
+            Lwt_unix.accept sock_listen;
+          end
+      in
+      (begin%lwts
+        fd_write_string sock_cli
+          (Msg.request_rep
+            Msg.Succeeded
+            (Msg.addr_of_sockaddr (Lwt_unix.getpeername sock_dst)))
+          >|= ignore;
+        pairStream ~ps1:ps sock_cli sock_dst;
+      end)
+      [%lwt.finally force_close sock_dst]
+    with Watchdog Timeout-> hostUnreachable ps sock_cli);
   end)
   [%lwt.finally force_close sock_listen]
 
@@ -186,24 +239,7 @@ let udp ps sock_cli socksAddr_proposal=
   [%lwt.finally force_close sock_relay]
 
 
-let cmd_notSupported ps sock_cli=
-  begin%lwts
-    fd_write_string sock_cli
-      Msg.(request_rep CommandNotSupported anyAddr4)
-      >|= ignore;
-    Lwt.return (0, 0);
-  end
-
-let atyp_notSupported ps sock_cli=
-  begin%lwts
-    fd_write_string sock_cli
-      Msg.(request_rep AddressTypeNotSupported anyAddr4)
-      >|= ignore;
-    Lwt.return (0, 0);
-  end
-
-
-let handshake
+let handshake ?timeout
   ?(auth= fun sock ps methods->
     if Caml.List.mem Msg.NoAuth methods then
       begin%lwts
@@ -228,8 +264,8 @@ let handshake
       let%lwt r= MsgParser.p_request_req ps in
       let%m[@PL] ((cmd, addr), ps)= r in
       match cmd with
-      | Cmd_connect-> connect ps sock addr
-      | Cmd_bind-> bind ps sock addr
+      | Cmd_connect-> connect ?timeout ps sock addr
+      | Cmd_bind-> bind ?timeout ps sock addr
       | Cmd_udp-> udp ps sock addr
       | Cmd_notSupported-> cmd_notSupported ps sock
     with
