@@ -50,9 +50,9 @@ let networkUnreachable ps sock_cli=
 
 
 let connect ?timeout ps sock_cli dst=
-  try%lwt
-    let%lwt sock_dst= watchdog_timeout ?timeout
-      (connect_socksAddr SOCK_STREAM dst) in
+  match%lwt watchdog_timeout ?timeout (connect_socksAddr SOCK_STREAM dst)
+  with
+  | sock_dst->
     (let addr= Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_dst) in
     begin%lwts
       fd_write_string sock_cli (Msg.request_rep Msg.Succeeded addr)
@@ -60,12 +60,16 @@ let connect ?timeout ps sock_cli dst=
       pairStream ~ps1:ps sock_cli sock_dst;
     end)
     [%lwt.finally force_close sock_dst]
-  with
-  | Watchdog Timeout-> hostUnreachable ps sock_cli
-  | Unix.Unix_error (ETIMEDOUT, f, p)-> hostUnreachable ps sock_cli
-  | Unix.Unix_error (ENETUNREACH, f, p)-> hostUnreachable ps sock_cli
-  | Unix.Unix_error (ECONNREFUSED, f, p)-> connectionRefused ps sock_cli
-  | Msg.Rep NetworkUnreachable-> networkUnreachable ps sock_cli
+  | exception Watchdog Timeout->
+    hostUnreachable ps sock_cli
+  | exception Unix.Unix_error (ETIMEDOUT, f, p)->
+    hostUnreachable ps sock_cli
+  | exception Unix.Unix_error (ENETUNREACH, f, p)->
+    hostUnreachable ps sock_cli
+  | exception Unix.Unix_error (ECONNREFUSED, f, p)->
+    connectionRefused ps sock_cli
+  | exception Msg.Rep NetworkUnreachable->
+    networkUnreachable ps sock_cli
 
 
 let bind ?timeout ps sock_cli dst=
@@ -86,14 +90,14 @@ let bind ?timeout ps sock_cli dst=
         Msg.Succeeded
         (Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_listen)))
       >|= ignore;
-    (try%lwt
-      let%lwt (sock_dst, dst_addr)=
-        watchdog_timeout ?timeout
-          begin
-            Lwt_unix.listen sock_listen 1;
-            Lwt_unix.accept sock_listen;
-          end
-      in
+    (match%lwt
+      watchdog_timeout ?timeout
+        begin
+          Lwt_unix.listen sock_listen 1;
+          Lwt_unix.accept sock_listen;
+        end
+    with
+    | (sock_dst, dst_addr)->
       (begin%lwts
         fd_write_string sock_cli
           (Msg.request_rep
@@ -103,7 +107,8 @@ let bind ?timeout ps sock_cli dst=
         pairStream ~ps1:ps sock_cli sock_dst;
       end)
       [%lwt.finally force_close sock_dst]
-    with Watchdog Timeout-> hostUnreachable ps sock_cli);
+
+    | exception Watchdog Timeout-> hostUnreachable ps sock_cli);
   end)
   [%lwt.finally force_close sock_listen]
 
