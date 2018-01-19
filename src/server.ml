@@ -114,20 +114,6 @@ let bind ?timeout ps sock_cli dst=
 
 
 let udp ps sock_cli socksAddr_proposal=
-  let watchdog sock thread ()=
-    (** cancel thread when sock closed *)
-    let bufsize= 16 in
-    let buf= Caml.Bytes.create bufsize in
-    let rec watchdog ()=
-      let%lwt len= Lwt_unix.read sock buf 0 bufsize in
-      if len > 0 then
-        watchdog ()
-      else
-        Lwt.cancel thread |> return
-    in
-    watchdog ()
-  in
-
   let%lwt addr_proposal= resolv_addr socksAddr_proposal in
   let addr_cli= Lwt_unix.getpeername sock_cli in
 
@@ -229,7 +215,7 @@ let udp ps sock_cli socksAddr_proposal=
 
     let pairing= pair IASet.empty in
     try%lwt
-      async (watchdog sock_cli pairing);
+      ignore_result (watchdog_read sock_cli pairing);
       pairing
     with _-> return (!flowIn, !flowOut)
   in
