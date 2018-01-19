@@ -62,6 +62,7 @@ let connect ?timeout ps sock_cli dst=
     [%lwt.finally force_close sock_dst]
   with
   | Watchdog Timeout-> hostUnreachable ps sock_cli
+  | Unix.Unix_error (ETIMEDOUT, f, p)-> hostUnreachable ps sock_cli
   | Unix.Unix_error (ENETUNREACH, f, p)-> hostUnreachable ps sock_cli
   | Unix.Unix_error (ECONNREFUSED, f, p)-> connectionRefused ps sock_cli
   | Msg.Rep NetworkUnreachable-> networkUnreachable ps sock_cli
