@@ -24,7 +24,7 @@ let authHandler_userpswd user pswd=
     | _-> fail_with "unsupported method"
 
 let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
-  ~(socks5:Lwt_unix.sockaddr) ~(dst:Msg.addr)=
+  ~(socks5:Lwt_unix.sockaddr) ~(dst:Msg.addr) cmd=
   let domain= Unix.domain_of_sockaddr socks5 in
   let sock= Lwt_unix.(socket domain SOCK_STREAM 0) in
   let ps= Common.initState (Common.Fd sock) in
@@ -40,7 +40,7 @@ let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
 
       begin%lwts
         fd_write_string sock
-          (Msg.request_req Msg.Cmd_connect dst)
+          (Msg.request_req cmd dst)
           >|= ignore;
         let%lwt r= MsgParser.p_request_rep ps in
         let%m[@PL] ((rep, addr), ps)= r in
@@ -58,13 +58,13 @@ let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
 
 let connect ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   ~socks5 ~dst=
-  streamCommon ~methods ~auth ~socks5 ~dst
+  streamCommon ~methods ~auth ~socks5 ~dst Msg.Cmd_connect
 
 
 let bind ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   ~socks5 ~dst ~notifier=
   let%lwt (sock, addr_s, ps)=
-    streamCommon ~methods ~auth ~socks5 ~dst in
+    streamCommon ~methods ~auth ~socks5 ~dst Msg.Cmd_bind in
   begin%lwts
     notifier addr_s;
     let%lwt r= MsgParser.p_request_rep ps in
