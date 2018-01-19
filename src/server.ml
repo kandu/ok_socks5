@@ -153,22 +153,27 @@ let udp ps sock_cli socksAddr_proposal=
 
       let from_client ()=
         let handler ()=
-          let%lwt msg= Parsec.parse_string MsgParser.p_udp_datagram
-              data in
-          let%m[@PL] ((frag, addr, data), r)= msg in
-          if frag <> 0 then
-            return remotes
-          else
-            let%lwt dst_addr= resolv_addr addr in
-            let dst_sA= sockaddr_to_socksAddr dst_addr in
-            let remotes= IASet.add remotes dst_sA.addr in
-            let data= Caml.Bytes.of_string data in
-            begin%lwts
-              Lwt_unix.sendto sock_relay
-                data 0 (Caml.Bytes.length data)
-                [] dst_addr >|= ignore;
-              return remotes;
-            end
+          match%lwt
+            let%lwt msg= Parsec.parse_string MsgParser.p_udp_datagram
+                data in
+            let%m[@PL] ((frag, addr, data), r)= msg in
+            return ((frag, addr, data), r)
+          with
+          | ((frag, addr, data), r)->
+            if frag <> 0 then
+              return remotes
+            else
+              let%lwt dst_addr= resolv_addr addr in
+              let dst_sA= sockaddr_to_socksAddr dst_addr in
+              let remotes= IASet.add remotes dst_sA.addr in
+              let data= Caml.Bytes.of_string data in
+              begin%lwts
+                Lwt_unix.sendto sock_relay
+                  data 0 (Caml.Bytes.length data)
+                  [] dst_addr >|= ignore;
+                return remotes;
+              end
+          | exception Msg.Rep AddressTypeNotSupported-> return remotes
         in
         if !limit.port = 0 then
           begin
@@ -224,7 +229,7 @@ let udp ps sock_cli socksAddr_proposal=
     fd_write_string sock_cli
       (Msg.request_rep
         Msg.Succeeded
-        (Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_relay)))
+        (Msg.addr_of_sockaddr relay_sockname))
       >|= ignore;
     pair ();
   end)
