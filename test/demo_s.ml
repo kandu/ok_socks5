@@ -1,13 +1,10 @@
 open Core.Std [@@ocaml.warning "-3"]
 open Fn
 open Lwt
+open Ok_socks5
+open Common
 
 let pp_sexp_hum= Format.asprintf "%a" Sexplib.Sexp.pp_hum
-
-let force_close fd=
-  try%lwt
-    Lwt_unix.close fd
-  with _-> Lwt.return ()
 
 let listen server f=
   let rec wait sock=
@@ -35,13 +32,13 @@ let s f=
   end
 
 let f sock peername=
-  let%lwt (flowIn, flowOut)= Ok_socks5.Server.handshake (sock, peername) in
+  let%lwt (flowIn, flowOut)= Server.handshake (sock, peername) in
   Lwt_io.printf "%s: %d, %d\n"
     (Unix.sexp_of_sockaddr peername |> pp_sexp_hum)
     flowIn
     flowOut
 
 let ()=
-  Ok_socks5.Common.init ();
+  Common.init ();
   Lwt_main.run @@ s f
 
