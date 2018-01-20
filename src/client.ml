@@ -23,14 +23,15 @@ let authHandler_userpswd user pswd=
         fail_with "username/password invalid"
     | _-> fail_with "unsupported method"
 
-let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
+let streamCommon ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   ~(socks5:Lwt_unix.sockaddr) ~(dst:Msg.addr) cmd=
   let domain= Unix.domain_of_sockaddr socks5 in
   let sock= Lwt_unix.(socket domain SOCK_STREAM 0) in
   let ps= Common.initState (Common.Fd sock) in
   try%lwt
     begin%lwts
-      Lwt_unix.connect sock socks5;
+      Watchdog.watchdog_timeout ?timeout
+        (Lwt_unix.connect sock socks5);
 
       fd_write_string sock (Msg.method_req methods) >|= ignore;
       let%lwt r= MsgParser.p_method_rep ps in
@@ -56,15 +57,15 @@ let streamCommon ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
       Lwt.fail exn;
     end
 
-let connect ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
+let connect ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   ~socks5 ~dst=
-  streamCommon ~methods ~auth ~socks5 ~dst Msg.Cmd_connect
+  streamCommon ?timeout ~methods ~auth ~socks5 ~dst Msg.Cmd_connect
 
 
-let bind ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
+let bind ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   ~socks5 ~dst ~notifier=
   let%lwt (sock, addr_s, ps)=
-    streamCommon ~methods ~auth ~socks5 ~dst Msg.Cmd_bind in
+    streamCommon ?timeout ~methods ~auth ~socks5 ~dst Msg.Cmd_bind in
   begin%lwts
     notifier addr_s;
     let%lwt r= MsgParser.p_request_rep ps in
@@ -75,14 +76,15 @@ let bind ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
       Lwt.fail_with (Msg.show_rep rep)
   end
 
-let udp_init ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
+let udp_init ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   ~socks5 ~dst=
   let domain= Unix.domain_of_sockaddr socks5 in
   let sock= Lwt_unix.(socket domain SOCK_STREAM 0) in
   let ps= Common.initState (Common.Fd sock) in
   try%lwt
     begin%lwts
-      Lwt_unix.connect sock socks5;
+      Watchdog.watchdog_timeout ?timeout
+        (Lwt_unix.connect sock socks5);
 
       fd_write_string sock (Msg.method_req methods) >|= ignore;
       let%lwt r= MsgParser.p_method_rep ps in
@@ -139,10 +141,10 @@ let udp_sendto sock relay=
   end
 
 
-let udp ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
+let udp ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   ~socks5 ~dst ~local=
   let%lwt (sock_relay, addr, ps)=
-    udp_init ~methods ~auth ~socks5 ~dst in
+    udp_init ?timeout ~methods ~auth ~socks5 ~dst in
 
   let domain= Unix.domain_of_sockaddr local in
   let sock_udp= Lwt_unix.(socket domain SOCK_DGRAM 0) in
