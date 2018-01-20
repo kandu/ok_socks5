@@ -9,10 +9,10 @@
   ))
 
 (executable
- ((name demo)
-  (public_name demo)
+ ((name demo_s)
+  (public_name demo_s)
   (flags (:standard -safe-string))
-  (modules (demo))
+  (modules (demo_s))
   (libraries (ok_socks5 core_kernel lwt.unix ppx_deriving.runtime))
   (preprocess (pps (lwt.ppx -no-sequence ppx_ok_lwt ppx_ok_monad ppx_deriving.std)))
   ))
