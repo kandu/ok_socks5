@@ -42,8 +42,44 @@ let connectionRefused= repError ConnectionRefused
 let networkUnreachable= repError NetworkUnreachable
 
 
-let connect ?timeout ?connRules ps sock_cli dst=
-  match%lwt connect_socksAddr ?timeout ?connRules SOCK_STREAM dst
+type forward_stream= {
+  timeout: float option;
+  methods: Msg.meth list option;
+  auth:
+    (Lwt_unix.file_descr ->
+    Ok_parsec.Common.state ->
+    Msg.meth ->
+    Ok_parsec.Common.state Lwt.t) option;
+  socks5: Lwt_unix.sockaddr;
+  dst: Msg.addr;
+}
+
+type forward_dgram = {
+  timeout: float option;
+  methods: Msg.meth list option;
+  auth:
+    (Lwt_unix.file_descr ->
+    Ok_parsec.Common.state ->
+    Msg.meth ->
+    Ok_parsec.Common.state Lwt.t) option;
+  socks5: Lwt_unix.sockaddr;
+  dst: Msg.addr;
+  local: Lwt_unix.sockaddr;
+}
+
+let connect ?timeout ?connRules ?forward ps sock_cli dst=
+  match%lwt
+    (match forward with
+    | Some forward->
+      let%lwt (fwd, fwd_addr, ps)= Client.connect
+        ?timeout:forward.timeout
+        ?methods:forward.methods
+        ?auth:forward.auth
+        ~socks5:forward.socks5 ~dst:forward.dst
+      in
+      return fwd
+    | None->
+      connect_socksAddr ?timeout ?connRules SOCK_STREAM dst)
   with
   | sock_dst->
     (let addr= Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_dst) in
