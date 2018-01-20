@@ -32,6 +32,14 @@ let hostUnreachable ps sock_cli=
     Lwt.return (0, 0);
   end
 
+let connectionNotAllowed ps sock_cli=
+  begin%lwts
+    fd_write_string sock_cli
+      Msg.(request_rep ConnectionNotAllowed anyAddr4)
+      >|= ignore;
+    Lwt.return (0, 0);
+  end
+
 let connectionRefused ps sock_cli=
   begin%lwts
     fd_write_string sock_cli
@@ -49,8 +57,8 @@ let networkUnreachable ps sock_cli=
   end
 
 
-let connect ?timeout ps sock_cli dst=
-  match%lwt watchdog_timeout ?timeout (connect_socksAddr SOCK_STREAM dst)
+let connect ?timeout ?connRules ps sock_cli dst=
+  match%lwt connect_socksAddr ?timeout ?connRules SOCK_STREAM dst
   with
   | sock_dst->
     (let addr= Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_dst) in
@@ -62,6 +70,8 @@ let connect ?timeout ps sock_cli dst=
     [%lwt.finally force_close sock_dst]
   | exception Watchdog Timeout->
     hostUnreachable ps sock_cli
+  | exception Msg.Rep ConnectionNotAllowed->
+    connectionNotAllowed ps sock_cli
   | exception Unix.Unix_error (ETIMEDOUT, f, p)->
     hostUnreachable ps sock_cli
   | exception Unix.Unix_error (ENETUNREACH, f, p)->
@@ -248,6 +258,7 @@ let handshake ?timeout
         cmd_notSupported ps sock >|= ignore;
         return (false, ps);
       end)
+  ?connRules
   ((sock, sockaddr):Lwt_unix.file_descr * Lwt_unix.sockaddr)
   =
   let ps= Common.initState (Common.Fd sock) in
@@ -261,7 +272,7 @@ let handshake ?timeout
       let%lwt r= MsgParser.p_request_req ps in
       let%m[@PL] ((cmd, addr), ps)= r in
       match cmd with
-      | Cmd_connect-> connect ?timeout ps sock addr
+      | Cmd_connect-> connect ?timeout ?connRules ps sock addr
       | Cmd_bind-> bind ?timeout ps sock addr
       | Cmd_udp-> udp ps sock addr
       | Cmd_notSupported-> cmd_notSupported ps sock
