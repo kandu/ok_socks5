@@ -92,10 +92,16 @@ let connect_sockaddr ?timeout socket_type dst=
       end);
   end
 
-let connect_socksAddr ?timeout socket_type dst=
+let connect_socksAddr ?timeout ?connRules socket_type dst=
   watchdog_timeout ?timeout
     (let%lwt dst_addr= resolv_addr dst in
-    connect_sockaddr socket_type dst_addr)
+    match connRules with
+    | Some connRules->
+      if connRules dst dst_addr then
+        connect_sockaddr socket_type dst_addr
+      else
+        Lwt.fail Msg.(Rep ConnectionNotAllowed)
+    | None-> connect_sockaddr socket_type dst_addr)
 
 
 type ioPair= {ic: Lwt_io.input_channel; oc: Lwt_io.output_channel}
