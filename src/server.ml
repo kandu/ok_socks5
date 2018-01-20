@@ -24,37 +24,22 @@ let atyp_notSupported ps sock_cli=
     Lwt.return (0, 0);
   end
 
-let hostUnreachable ps sock_cli=
-  begin%lwts
-    fd_write_string sock_cli
-      Msg.(request_rep HostUnreachable anyAddr4)
-      >|= ignore;
-    Lwt.return (0, 0);
-  end
+let repError rep=
+  fun ps sock_cli->
+    begin%lwts
+      fd_write_string sock_cli
+        Msg.(request_rep rep anyAddr4)
+        >|= ignore;
+      Lwt.return (0, 0);
+    end
 
-let connectionNotAllowed ps sock_cli=
-  begin%lwts
-    fd_write_string sock_cli
-      Msg.(request_rep ConnectionNotAllowed anyAddr4)
-      >|= ignore;
-    Lwt.return (0, 0);
-  end
+let hostUnreachable= repError HostUnreachable
 
-let connectionRefused ps sock_cli=
-  begin%lwts
-    fd_write_string sock_cli
-      Msg.(request_rep ConnectionRefused anyAddr4)
-      >|= ignore;
-    Lwt.return (0, 0);
-  end
+let connectionNotAllowed= repError ConnectionNotAllowed
 
-let networkUnreachable ps sock_cli=
-  begin%lwts
-    fd_write_string sock_cli
-      Msg.(request_rep NetworkUnreachable anyAddr4)
-      >|= ignore;
-    Lwt.return (0, 0);
-  end
+let connectionRefused= repError ConnectionRefused
+
+let networkUnreachable= repError NetworkUnreachable
 
 
 let connect ?timeout ?connRules ps sock_cli dst=
