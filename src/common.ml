@@ -175,37 +175,40 @@ let pairStream ?(bufSize=Int.pow 2 14) ?ps1 ?ps2 ?ioPair1 ?ioPair2 s1 s2=
       force_close s2;
     end]
 
-let pairDgram s1 s2=
+let pairDgram ?(filter1= fun _-> true) s1 ?(filter2= fun _-> true) s2=
   let open Lwt in
   let (sock1, addr1)= s1
   and (sock2, addr2)= s2 in
   let flowIn= ref 0
   and flowOut= ref 0 in
 
-  let flow s1 s2 dst record=
+  let flow s1 s2 dst filter record=
     let buf= Bytes.create udp_bufsize in
     let rec flow ()=
       let%lwt (len, peername)=
         Lwt_unix.recvfrom s1 buf 0 udp_bufsize []
       in
-      let datagram= Caml.Bytes.(sub buf 0 len) in
       record:= !record + len;
-      begin%lwts
-        Lwt_unix.sendto s2
-          datagram 0 (Caml.Bytes.length datagram)
-          []
-          dst
-          >|= ignore;
-        flow ();
-      end
+      if filter peername then
+        let datagram= Caml.Bytes.(sub buf 0 len) in
+        begin%lwts
+          Lwt_unix.sendto s2
+            datagram 0 (Caml.Bytes.length datagram)
+            []
+            dst
+            >|= ignore;
+          flow ();
+        end
+      else
+        flow ()
     in
     flow ()
   in
   let pairStream ()=
     begin%lwts
       join [
-        flow sock1 sock2 addr2 flowOut;
-        flow sock2 sock1 addr1 flowIn];
+        flow sock1 sock2 addr2 filter1 flowOut;
+        flow sock2 sock1 addr1 filter2 flowIn];
       return (!flowIn, !flowOut);
     end
   in
