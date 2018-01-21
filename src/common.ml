@@ -175,6 +175,50 @@ let pairStream ?(bufSize=Int.pow 2 14) ?ps1 ?ps2 ?ioPair1 ?ioPair2 s1 s2=
       force_close s2;
     end]
 
+let pairDgram s1 s2=
+  let open Lwt in
+  let (sock1, addr1)= s1
+  and (sock2, addr2)= s2 in
+  let flowIn= ref 0
+  and flowOut= ref 0 in
+
+  let flow s1 s2 dst record=
+    let buf= Bytes.create udp_bufsize in
+    let rec flow ()=
+      let%lwt (len, peername)=
+        Lwt_unix.recvfrom s1 buf 0 udp_bufsize []
+      in
+      let datagram= Caml.Bytes.(sub buf 0 len) in
+      record:= !record + len;
+      begin%lwts
+        Lwt_unix.sendto s2
+          datagram 0 (Caml.Bytes.length datagram)
+          []
+          dst
+          >|= ignore;
+        flow ();
+      end
+    in
+    flow ()
+  in
+  let pairStream ()=
+    begin%lwts
+      join [
+        flow sock1 sock2 addr2 flowOut;
+        flow sock2 sock1 addr1 flowIn];
+      return (!flowIn, !flowOut);
+    end
+  in
+  (try%lwt
+    pairStream ()
+  with _->return (!flowIn, !flowOut))
+  [%lwt.finally
+    begin%lwts
+      force_close sock1;
+      force_close sock2;
+    end]
+
+
 let init ()=
   begin
     Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
