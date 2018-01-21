@@ -136,11 +136,7 @@ let bind ?timeout ?(forward:forward_stream option) ps sock_cli dst=
     in
     begin%lwts
       Lwt_unix.bind sock_listen addr_listen;
-      fd_write_string sock_cli
-        (Msg.request_rep
-          Msg.Succeeded
-          (Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_listen)))
-        >|= ignore;
+      tellAddr (Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_listen));
 
       (match%lwt
         watchdog_timeout ?timeout
@@ -151,11 +147,7 @@ let bind ?timeout ?(forward:forward_stream option) ps sock_cli dst=
       with
       | (sock_dst, dst_addr)->
         (begin%lwts
-          fd_write_string sock_cli
-            (Msg.request_rep
-              Msg.Succeeded
-              (Msg.addr_of_sockaddr dst_addr))
-            >|= ignore;
+          tellAddr (Msg.addr_of_sockaddr dst_addr);
           pairStream ~ps1:ps sock_cli sock_dst;
         end)
         [%lwt.finally force_close sock_dst]
