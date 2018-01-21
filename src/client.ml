@@ -110,6 +110,28 @@ let udp_init ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
       Lwt.fail exn;
     end
 
+let udp_unpack datagram=
+  let%lwt r= Parsec.parse_string MsgParser.p_udp_datagram datagram in
+  let%m[@PL] ((frag, addr, data), ps)= r in
+  if frag = 0 then
+    return (Some (addr, data))
+  else
+    (* udp frag is no supported, drop the datagram silently *)
+    return None
+
+
+let udp_unpack datagram=
+  let%lwt r= Parsec.parse_string MsgParser.p_udp_datagram datagram in
+  let%m[@PL] ((frag, addr, data), ps)= r in
+  if frag = 0 then
+    return (Some (addr, data))
+  else
+    (* udp frag is no supported, drop the datagram silently *)
+    return None
+
+let udp_pack dst msg= Msg.udp_datagram 0 dst msg
+
+
 let udp_recvfrom sock=
   let bufsize= Int.pow 2 16 in
   let buf= Bytes.create bufsize in
@@ -118,19 +140,15 @@ let udp_recvfrom sock=
       Lwt_unix.recvfrom sock buf 0 bufsize flags
     in
     let datagram= Caml.Bytes.sub buf 0 len |> Caml.Bytes.to_string in
-    let%lwt r= Parsec.parse_string MsgParser.p_udp_datagram datagram in
-    let%m[@PL] ((frag, addr, data), ps)= r in
-    if frag = 0 then
-      return (addr, data)
-    else
-      (* udp frag is no supported, drop the datagram silently *)
-      recv flags
+    match%lwt udp_unpack datagram with
+    | Some msg-> return msg
+    | None-> recv flags
   in
   recv
 
 let udp_sendto sock relay=
   let send dst msg flags=
-    let msg= Msg.udp_datagram 0 dst msg in
+    let msg= udp_pack dst msg in
     let buf= Caml.Bytes.of_string msg in
     let len= String.length msg in
     Lwt_unix.send sock buf 0 len flags
