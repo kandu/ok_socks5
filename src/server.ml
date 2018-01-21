@@ -67,7 +67,8 @@ type forward_dgram = {
   local: Lwt_unix.sockaddr;
 }
 
-let connect ?timeout ?connRules ?forward ps sock_cli dst=
+let connect ?timeout ?connRules ?(forward:forward_stream option)
+  ps sock_cli dst=
   match%lwt
     (match forward with
     | Some forward->
@@ -103,45 +104,66 @@ let connect ?timeout ?connRules ?forward ps sock_cli dst=
     networkUnreachable ps sock_cli
 
 
-let bind ?timeout ps sock_cli dst=
+let bind ?timeout ?(forward:forward_stream option) ps sock_cli dst=
   let%lwt dst_addr= resolv_addr dst in
   let domain= Unix.domain_of_sockaddr dst_addr in
-  let sock_listen= Lwt_unix.(socket domain SOCK_STREAM 0) in
-  (let addr_listen=
-    let open Lwt_unix in
-    match domain with
-    | PF_INET-> ADDR_INET (Unix.inet_addr_any, 0)
-    | PF_INET6-> ADDR_INET (Unix.inet6_addr_any, 0)
-    | _-> assert false
+  let tellAddr addr=
+    fd_write_string sock_cli (Msg.request_rep Msg.Succeeded addr)
+      >|= ignore
   in
-  begin%lwts
-    Lwt_unix.bind sock_listen addr_listen;
-    fd_write_string sock_cli
-      (Msg.request_rep
-        Msg.Succeeded
-        (Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_listen)))
-      >|= ignore;
-    (match%lwt
-      watchdog_timeout ?timeout
-        begin
-          Lwt_unix.listen sock_listen 1;
-          Lwt_unix.accept sock_listen;
-        end
-    with
-    | (sock_dst, dst_addr)->
-      (begin%lwts
-        fd_write_string sock_cli
-          (Msg.request_rep
-            Msg.Succeeded
-            (Msg.addr_of_sockaddr (Lwt_unix.getpeername sock_dst)))
-          >|= ignore;
-        pairStream ~ps1:ps sock_cli sock_dst;
-      end)
-      [%lwt.finally force_close sock_dst]
+  match forward with
+  | Some forward->
+    let%lwt (fwd, sock_s, sock_c, ps)= Client.bind
+      ?timeout:forward.timeout
+      ?methods:forward.methods
+      ?auth:forward.auth
+      ~socks5:forward.socks5 ~dst:forward.dst
+      ~notifier:tellAddr
+    in
+    (begin%lwts
+      tellAddr sock_c;
+      pairStream ~ps1:ps sock_cli fwd;
+    end)
+    [%lwt.finally force_close fwd]
+  | None->
+    let sock_listen= Lwt_unix.(socket domain SOCK_STREAM 0) in
+    (let addr_listen=
+      let open Lwt_unix in
+      match domain with
+      | PF_INET-> ADDR_INET (Unix.inet_addr_any, 0)
+      | PF_INET6-> ADDR_INET (Unix.inet6_addr_any, 0)
+      | _-> assert false
+    in
+    begin%lwts
+      Lwt_unix.bind sock_listen addr_listen;
+      fd_write_string sock_cli
+        (Msg.request_rep
+          Msg.Succeeded
+          (Msg.addr_of_sockaddr (Lwt_unix.getsockname sock_listen)))
+        >|= ignore;
 
-    | exception Watchdog Timeout-> hostUnreachable ps sock_cli);
-  end)
-  [%lwt.finally force_close sock_listen]
+      (match%lwt
+        watchdog_timeout ?timeout
+          begin
+            Lwt_unix.listen sock_listen 1;
+            Lwt_unix.accept sock_listen;
+          end
+      with
+      | (sock_dst, dst_addr)->
+        (begin%lwts
+          fd_write_string sock_cli
+            (Msg.request_rep
+              Msg.Succeeded
+              (Msg.addr_of_sockaddr dst_addr))
+            >|= ignore;
+          pairStream ~ps1:ps sock_cli sock_dst;
+        end)
+        [%lwt.finally force_close sock_dst]
+
+      | exception Watchdog Timeout-> hostUnreachable ps sock_cli);
+
+    end)
+    [%lwt.finally force_close sock_listen]
 
 
 let udp ps sock_cli socksAddr_proposal=
