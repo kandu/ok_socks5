@@ -158,7 +158,7 @@ let bind ?timeout ?(forward:forward_stream option) ps sock_cli dst=
     [%lwt.finally force_close sock_listen]
 
 
-let udp ps sock_cli socksAddr_proposal=
+let udp_relay ps sock_cli socksAddr_proposal=
   let%lwt addr_proposal= resolv_addr socksAddr_proposal in
   let addr_cli= Lwt_unix.getpeername sock_cli in
 
@@ -170,18 +170,18 @@ let udp ps sock_cli socksAddr_proposal=
   let limit_addr= ref (socksAddr_to_sockaddr !limit) in
 
   let domain= Unix.domain_of_sockaddr addr_cli in
-  let sock_relay= Lwt_unix.(socket domain SOCK_DGRAM 0) in
-  (let addr_relay=
+  let sock_udp= Lwt_unix.(socket domain SOCK_DGRAM 0) in
+  (let addr_udp=
     let open Lwt_unix in
     if domain = PF_INET6 then
       ADDR_INET (Unix.inet6_addr_any, 0)
     else
       ADDR_INET (Unix.inet_addr_any, 0)
   in
-  let%lwt relay_sockname=
+  let%lwt udp_sockname=
     begin%lwts
-      Lwt_unix.bind sock_relay addr_relay;
-      return (Lwt_unix.getsockname sock_relay);
+      Lwt_unix.bind sock_udp addr_udp;
+      return (Lwt_unix.getsockname sock_udp);
     end
   in
 
@@ -191,7 +191,7 @@ let udp ps sock_cli socksAddr_proposal=
     and flowOut= ref 0 in
     let rec pair remotes=
       let%lwt (len, peername)=
-        Lwt_unix.recvfrom sock_relay buf 0 udp_bufsize []
+        Lwt_unix.recvfrom sock_udp buf 0 udp_bufsize []
       in
       let peerAddr= sockaddr_to_socksAddr peername in
       let data= Caml.Bytes.(sub buf 0 len |> to_string) in
@@ -213,7 +213,7 @@ let udp ps sock_cli socksAddr_proposal=
               let remotes= IASet.add remotes dst_sA.addr in
               let data= Caml.Bytes.of_string data in
               begin%lwts
-                Lwt_unix.sendto sock_relay
+                Lwt_unix.sendto sock_udp
                   data 0 (Caml.Bytes.length data)
                   [] dst_addr >|= ignore;
                 return remotes;
@@ -236,7 +236,7 @@ let udp ps sock_cli socksAddr_proposal=
           let datagram= Caml.Bytes.of_string
             Msg.(udp_datagram 0 (addr_of_sockaddr peername) data)
           in
-          Lwt_unix.sendto sock_relay
+          Lwt_unix.sendto sock_udp
             datagram 0 (Caml.Bytes.length datagram)
             []
             !limit_addr
@@ -274,12 +274,91 @@ let udp ps sock_cli socksAddr_proposal=
     fd_write_string sock_cli
       (Msg.request_rep
         Msg.Succeeded
-        (Msg.addr_of_sockaddr relay_sockname))
+        (Msg.addr_of_sockaddr udp_sockname))
       >|= ignore;
     pair ();
   end)
-  [%lwt.finally force_close sock_relay]
+  [%lwt.finally force_close sock_udp]
 
+
+let udp_forward ~(forward:forward_dgram) ps sock_cli socksAddr_proposal=
+  let%lwt addr_proposal= resolv_addr socksAddr_proposal in
+  let addr_cli= Lwt_unix.getpeername sock_cli in
+
+  let limit=
+    let sa_cli= sockaddr_to_socksAddr addr_cli
+    and sa_proposal= sockaddr_to_socksAddr addr_proposal in
+    ref { addr= sa_cli.addr; port= sa_proposal.port }
+  in
+  let limit_addr= ref (socksAddr_to_sockaddr !limit) in
+  let domain= Unix.domain_of_sockaddr addr_cli in
+
+  let%lwt (sock_socks5, addr, ps)=
+    Client.udp_init
+    ?timeout:forward.timeout
+    ?methods:forward.methods
+    ?auth:forward.auth
+    ~socks5:forward.socks5 ~dst:forward.dst
+  in
+  let sock_relay= Lwt_unix.(socket domain SOCK_DGRAM 0) in
+  let sock_udp= Lwt_unix.(socket domain SOCK_DGRAM 0) in
+  (let addr_udp=
+    let open Lwt_unix in
+    if domain = PF_INET6 then
+      ADDR_INET (Unix.inet6_addr_any, 0)
+    else
+      ADDR_INET (Unix.inet_addr_any, 0)
+  in
+  let%lwt relay_sockname=
+    begin%lwts
+      Lwt_unix.bind sock_relay addr_udp;
+      return (Lwt_unix.getsockname sock_udp);
+    end
+  in
+  let%lwt relay_peername= resolv_addr addr in
+  let%lwt udp_sockname=
+    begin%lwts
+      Lwt_unix.bind sock_udp addr_udp;
+      return (Lwt_unix.getsockname sock_udp);
+    end
+  in
+
+  let pair ()=
+    let%lwt udp_peername=
+      if !limit.port <> 0 then
+        return !limit_addr
+      else
+        let buf= Bytes.create udp_bufsize in
+        let%lwt (len, peername)=
+          Lwt_unix.recvfrom sock_udp buf 0 udp_bufsize []
+        in
+        let datagram= Caml.Bytes.(sub buf 0 len) in
+        begin%lwts
+          Lwt_unix.sendto sock_relay
+            datagram 0 (Caml.Bytes.length datagram)
+            []
+            relay_peername
+            >|= ignore;
+          return peername;
+        end
+    in
+    pairDgram ~filter1:((=) udp_peername) (sock_udp, udp_peername) (sock_relay, relay_peername)
+  in
+
+  begin%lwts
+    fd_write_string sock_cli
+      (Msg.request_rep
+        Msg.Succeeded
+        (Msg.addr_of_sockaddr udp_sockname))
+      >|= ignore;
+    pair ();
+  end)
+  [%lwt.finally force_close sock_udp]
+
+let udp ?(forward:forward_dgram option) ps sock_cli socksAddr_proposal=
+  match forward with
+  | Some forward-> udp_forward ~forward ps sock_cli socksAddr_proposal
+  | None-> udp_relay ps sock_cli socksAddr_proposal
 
 let handshake ?timeout
   ?(auth= fun sock ps methods->
@@ -294,6 +373,8 @@ let handshake ?timeout
         return (false, ps);
       end)
   ?connRules
+  ?forwardStream
+  ?forwardDgram
   ((sock, sockaddr):Lwt_unix.file_descr * Lwt_unix.sockaddr)
   =
   let ps= Common.initState (Common.Fd sock) in
