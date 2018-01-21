@@ -119,16 +119,6 @@ let udp_unpack datagram=
     (* udp frag is no supported, drop the datagram silently *)
     return None
 
-
-let udp_unpack datagram=
-  let%lwt r= Parsec.parse_string MsgParser.p_udp_datagram datagram in
-  let%m[@PL] ((frag, addr, data), ps)= r in
-  if frag = 0 then
-    return (Some (addr, data))
-  else
-    (* udp frag is no supported, drop the datagram silently *)
-    return None
-
 let udp_pack dst msg= Msg.udp_datagram 0 dst msg
 
 
