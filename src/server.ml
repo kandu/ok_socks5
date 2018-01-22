@@ -373,8 +373,9 @@ let handshake ?timeout
         return (false, ps);
       end)
   ?connRules
-  ?forwardStream
-  ?forwardDgram
+  ?(connect= connect ?forward:None)
+  ?(bind= bind ?forward:None)
+  ?(udp= udp ?forward:None)
   ((sock, sockaddr):Lwt_unix.file_descr * Lwt_unix.sockaddr)
   =
   let ps= Common.initState (Common.Fd sock) in
@@ -388,10 +389,9 @@ let handshake ?timeout
       let%lwt r= MsgParser.p_request_req ps in
       let%m[@PL] ((cmd, addr), ps)= r in
       match cmd with
-      | Cmd_connect-> connect ?timeout ?connRules ?forward:forwardStream
-          ps sock addr
-      | Cmd_bind-> bind ?timeout ?forward:forwardStream ps sock addr
-      | Cmd_udp-> udp ?forward:forwardDgram ps sock addr
+      | Cmd_connect-> connect ?timeout ?connRules ps sock addr
+      | Cmd_bind-> bind ?timeout ps sock addr
+      | Cmd_udp-> udp ps sock addr
       | Cmd_notSupported-> cmd_notSupported ps sock
     with
     | Msg.Rep AddressTypeNotSupported-> atyp_notSupported ps sock
