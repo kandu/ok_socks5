@@ -77,7 +77,7 @@ let bind ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   end
 
 let udp_init ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
-  ~socks5 ~dst=
+  ~socks5 ~proposal=
   let domain= Unix.domain_of_sockaddr socks5 in
   let sock= Lwt_unix.(socket domain SOCK_STREAM 0) in
   let ps= Common.initState (Common.Fd sock) in
@@ -94,7 +94,7 @@ let udp_init ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
 
       begin%lwts
         fd_write_string sock
-          (Msg.request_req Msg.Cmd_udp dst)
+          (Msg.request_req Msg.Cmd_udp proposal)
           >|= ignore;
         let%lwt r= MsgParser.p_request_rep ps in
         let%m[@PL] ((rep, addr), ps)= r in
@@ -150,9 +150,9 @@ let udp_sendto sock relay=
 
 
 let udp ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
-  ~socks5 ~dst ~local=
+  ~socks5 ~proposal ~local=
   let%lwt (sock_relay, addr, ps)=
-    udp_init ?timeout ~methods ~auth ~socks5 ~dst in
+    udp_init ?timeout ~methods ~auth ~socks5 ~proposal in
 
   let domain= Unix.domain_of_sockaddr local in
   let sock_udp= Lwt_unix.(socket domain SOCK_DGRAM 0) in
