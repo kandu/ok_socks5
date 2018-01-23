@@ -17,8 +17,7 @@ test:
 demo_s: build
 	./_build/default/test/demo_s.exe
 
-demo_c: build
-	./_build/default/test/demo_c.exe
+demo_f: build
 
 clean:
 	jbuilder clean
