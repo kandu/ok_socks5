@@ -51,7 +51,6 @@ type forward_stream= {
     Msg.meth ->
     Ok_parsec.Common.state Lwt.t) option;
   socks5: Lwt_unix.sockaddr;
-  dst: Msg.addr;
 }
 
 type forward_dgram = {
@@ -63,7 +62,6 @@ type forward_dgram = {
     Msg.meth ->
     Ok_parsec.Common.state Lwt.t) option;
   socks5: Lwt_unix.sockaddr;
-  dst: Msg.addr;
   local: Lwt_unix.sockaddr;
 }
 
@@ -76,7 +74,7 @@ let connect ?timeout ?connRules ?(forward:forward_stream option)
         ?timeout:forward.timeout
         ?methods:forward.methods
         ?auth:forward.auth
-        ~socks5:forward.socks5 ~dst:forward.dst
+        ~socks5:forward.socks5 ~dst
       in
       return fwd
     | None->
@@ -117,7 +115,7 @@ let bind ?timeout ?(forward:forward_stream option) ps sock_cli dst=
       ?timeout:forward.timeout
       ?methods:forward.methods
       ?auth:forward.auth
-      ~socks5:forward.socks5 ~dst:forward.dst
+      ~socks5:forward.socks5 ~dst
       ~notifier:tellAddr
     in
     (begin%lwts
@@ -298,7 +296,7 @@ let udp_forward ~(forward:forward_dgram) ps sock_cli socksAddr_proposal=
     ?timeout:forward.timeout
     ?methods:forward.methods
     ?auth:forward.auth
-    ~socks5:forward.socks5 ~dst:forward.dst
+    ~socks5:forward.socks5 ~proposal:socksAddr_proposal
   in
   let sock_relay= Lwt_unix.(socket domain SOCK_DGRAM 0) in
   let sock_udp= Lwt_unix.(socket domain SOCK_DGRAM 0) in
