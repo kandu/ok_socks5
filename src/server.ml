@@ -262,8 +262,9 @@ let udp_relay ps sock_cli socksAddr_proposal=
     in
 
     let pairing= pair IASet.empty in
+    async (fun ()->
+      try%lwt watchdog_read sock_cli pairing with _-> return ());
     try%lwt
-      ignore_result (watchdog_read sock_cli pairing);
       pairing
     with _-> return (!flowIn, !flowOut)
   in
