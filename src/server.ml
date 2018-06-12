@@ -1,4 +1,4 @@
-open Core_kernel.Std
+open Core_kernel.Std [@@ocaml.warning "-3"]
 open Lwt
 open Common
 open Ok_parsec
