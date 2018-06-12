@@ -1,4 +1,4 @@
-open Core_kernel.Std
+open Core_kernel.Std [@@ocaml.warning "-3"]
 
 let int16_to_net a= sprintf "%c%c"
   (a lsr 8 |> char_of_int)

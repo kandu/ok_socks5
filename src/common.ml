@@ -1,4 +1,4 @@
-open Core_kernel.Std
+open Core_kernel.Std [@@ocaml.warning "-3"]
 open Watchdog
 
 module PL = struct
@@ -223,11 +223,9 @@ let pairDgram ?(filter1= fun _-> true) s1 ?(filter2= fun _-> true) s2=
 
 
 let init ()=
-  begin
-    Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
-    Random.self_init ();
-    Core_kernel.Std.Random.self_init ();
-  end
+  Sys.set_signal Sys.sigpipe Sys.Signal_ignore;
+  Random.self_init ();
+  Core_kernel.Std.Random.self_init ()[@@ocaml.warning "-3"]
 
 open Ctypes
 open Foreign
