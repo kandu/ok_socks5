@@ -86,6 +86,12 @@ let anyAddr6= Ipv6 (Unix.inet6_addr_any, 0)
 
 type port= int
 
+let get_port_of_addr addr=
+  match addr with
+  | Ipv4 (_, port)-> port
+  | Ipv6 (_, port)-> port
+  | DomainName (_, port)-> port
+
 let addr_of_sockaddr sa=
   match sa with
   | Unix.ADDR_UNIX dm-> failwith "unix domain is not supported"

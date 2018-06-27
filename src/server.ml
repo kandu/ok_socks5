@@ -75,6 +75,7 @@ let connect ?timeout ?connRules ?(forward:forward_stream option)
         ?methods:forward.methods
         ?auth:forward.auth
         ~socks5:forward.socks5 ~dst
+        ()
       in
       return fwd
     | None->
@@ -117,6 +118,7 @@ let bind ?timeout ?(forward:forward_stream option) ps sock_cli dst=
       ?auth:forward.auth
       ~socks5:forward.socks5 ~dst
       ~notifier:tellAddr
+      ()
     in
     (begin%lwts
       tellAddr sock_c;
@@ -298,6 +300,7 @@ let udp_forward ~(forward:forward_dgram) ps sock_cli socksAddr_proposal=
     ?methods:forward.methods
     ?auth:forward.auth
     ~socks5:forward.socks5 ~proposal:socksAddr_proposal
+    ()
   in
   let sock_relay= Lwt_unix.(socket domain SOCK_DGRAM 0) in
   let sock_udp= Lwt_unix.(socket domain SOCK_DGRAM 0) in
