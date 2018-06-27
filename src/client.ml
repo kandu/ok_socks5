@@ -58,12 +58,12 @@ let streamCommon ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps
     end
 
 let connect ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
-  ~socks5 ~dst=
+  ~socks5 ~dst ()=
   streamCommon ?timeout ~methods ~auth ~socks5 ~dst Msg.Cmd_connect
 
 
 let bind ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
-  ~socks5 ~dst ~notifier=
+  ~socks5 ~dst ~notifier ()=
   let%lwt (sock, addr_s, ps)=
     streamCommon ?timeout ~methods ~auth ~socks5 ~dst Msg.Cmd_bind in
   begin%lwts
@@ -77,7 +77,7 @@ let bind ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   end
 
 let udp_init ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
-  ~socks5 ~proposal=
+  ~socks5 ~proposal ()=
   let domain= Unix.domain_of_sockaddr socks5 in
   let sock= Lwt_unix.(socket domain SOCK_STREAM 0) in
   let ps= Common.initState (Common.Fd sock) in
@@ -150,9 +150,9 @@ let udp_sendto sock relay=
 
 
 let udp ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
-  ~socks5 ~proposal ~local=
+  ~socks5 ~proposal ~local ()=
   let%lwt (sock_relay, addr, ps)=
-    udp_init ?timeout ~methods ~auth ~socks5 ~proposal in
+    udp_init ?timeout ~methods ~auth ~socks5 ~proposal () in
 
   let domain= Unix.domain_of_sockaddr local in
   let sock_udp= Lwt_unix.(socket domain SOCK_DGRAM 0) in
