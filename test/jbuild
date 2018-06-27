@@ -9,19 +9,37 @@
   ))
 
 (executable
- ((name demo_s)
-  (public_name demo_s)
+ ((name demo_socks5server)
+  (public_name demo_socks5server)
   (flags (:standard -safe-string))
-  (modules (demo_s))
+  (modules (demo_socks5server))
   (libraries (ok_socks5 core_kernel lwt.unix ppx_deriving.runtime))
   (preprocess (pps (lwt_ppx ppx_ok_lwt ppx_ok_monad ppx_deriving.std)))
   ))
 
 (executable
- ((name demo_f)
-  (public_name demo_f)
+ ((name demo_forward)
+  (public_name demo_forward)
   (flags (:standard -safe-string))
-  (modules (demo_f))
+  (modules (demo_forward))
+  (libraries (ok_socks5 core_kernel lwt.unix ppx_deriving.runtime))
+  (preprocess (pps (lwt_ppx ppx_ok_lwt ppx_ok_monad ppx_deriving.std)))
+  ))
+
+(executable
+ ((name demo_bind_client)
+  (public_name demo_bind_client)
+  (flags (:standard -safe-string))
+  (modules (demo_bind_client))
+  (libraries (ok_socks5 core_kernel lwt.unix ppx_deriving.runtime))
+  (preprocess (pps (lwt_ppx ppx_ok_lwt ppx_ok_monad ppx_deriving.std)))
+  ))
+
+(executable
+ ((name demo_bind_server)
+  (public_name demo_bind_server)
+  (flags (:standard -safe-string))
+  (modules (demo_bind_server))
   (libraries (ok_socks5 core_kernel lwt.unix ppx_deriving.runtime))
   (preprocess (pps (lwt_ppx ppx_ok_lwt ppx_ok_monad ppx_deriving.std)))
   ))
