@@ -12,6 +12,7 @@ syntax: glob
 **/*.so
 **/*.cm*
 _build
+jbuild-workspace
 .merlin
 ok_socks5.install
 
