@@ -42,7 +42,7 @@ let f sock peername=
   let%lwt (flowIn, flowOut)= Server.handshake
     ~connect:(Server.connect ~forward:forward_stream)
     (sock, peername) in
-  Lwt_io.printf "%s: %d, %d\n"
+  Lwt_io.printf "%s: %f, %f\n"
     (Unix.sexp_of_sockaddr peername |> pp_sexp_hum)
     flowIn
     flowOut

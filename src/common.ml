@@ -141,21 +141,21 @@ let pairStream ?(bufSize=Int.pow 2 14) ?ps1 ?ps2 ?ioPair1 ?ioPair2 s1 s2=
     in
     return (Caml.Bytes.cat ps chan)
   in
-  let flowIn= ref 0
-  and flowOut= ref 0 in
+  let flowIn= ref 0.
+  and flowOut= ref 0. in
   let flow remain s1 s2 record=
     let buf= Bytes.create bufSize in
     let rec flow ()=
       let%lwt readSize= Lwt_unix.read s1 buf 0 bufSize in
       if readSize > 0 then
-        (record:= !record + readSize;
+        (record:= !record +. (Float.of_int readSize);
         Lwt_unix.write s2 buf 0 readSize >>= fun _->
         flow ())
       else
         Lwt_unix.shutdown s2 Lwt_unix.SHUTDOWN_SEND |> return
     in
     Lwt_unix.write s2 remain 0 (Bytes.length remain) >>= fun _->
-    record:= !record + (Bytes.length remain);
+    record:= !record +. (Float.of_int (Bytes.length remain));
     flow ()
   in
   let pairStream ()=
@@ -168,7 +168,7 @@ let pairStream ?(bufSize=Int.pow 2 14) ?ps1 ?ps2 ?ioPair1 ?ioPair2 s1 s2=
   in
   (try%lwt
     pairStream ()
-  with _->return (!flowIn, !flowOut))
+  with _-> return (!flowIn, !flowOut))
   [%lwt.finally
     begin%lwts
       force_close s1;
@@ -179,8 +179,8 @@ let pairDgram ?(filter1= fun _-> true) s1 ?(filter2= fun _-> true) s2=
   let open Lwt in
   let (sock1, addr1)= s1
   and (sock2, addr2)= s2 in
-  let flowIn= ref 0
-  and flowOut= ref 0 in
+  let flowIn= ref 0.
+  and flowOut= ref 0. in
 
   let flow s1 s2 dst filter record=
     let buf= Bytes.create udp_bufsize in
@@ -188,7 +188,7 @@ let pairDgram ?(filter1= fun _-> true) s1 ?(filter2= fun _-> true) s2=
       let%lwt (len, peername)=
         Lwt_unix.recvfrom s1 buf 0 udp_bufsize []
       in
-      record:= !record + len;
+      record:= !record +. (Float.of_int len);
       if filter peername then
         let datagram= Caml.Bytes.(sub buf 0 len) in
         begin%lwts
@@ -214,7 +214,7 @@ let pairDgram ?(filter1= fun _-> true) s1 ?(filter2= fun _-> true) s2=
   in
   (try%lwt
     pairStream ()
-  with _->return (!flowIn, !flowOut))
+  with _-> return (!flowIn, !flowOut))
   [%lwt.finally
     begin%lwts
       force_close sock1;

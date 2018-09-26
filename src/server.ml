@@ -13,7 +13,7 @@ let cmd_notSupported ps sock_cli=
     fd_write_string sock_cli
       Msg.(request_rep CommandNotSupported anyAddr4)
       >|= ignore;
-    Lwt.return (0, 0);
+    Lwt.return (0., 0.);
   end
 
 let atyp_notSupported ps sock_cli=
@@ -21,7 +21,7 @@ let atyp_notSupported ps sock_cli=
     fd_write_string sock_cli
       Msg.(request_rep AddressTypeNotSupported anyAddr4)
       >|= ignore;
-    Lwt.return (0, 0);
+    Lwt.return (0., 0.);
   end
 
 let repError rep=
@@ -30,7 +30,7 @@ let repError rep=
       fd_write_string sock_cli
         Msg.(request_rep rep anyAddr4)
         >|= ignore;
-      Lwt.return (0, 0);
+      Lwt.return (0., 0.);
     end
 
 let hostUnreachable= repError HostUnreachable
@@ -187,8 +187,8 @@ let udp_relay ps sock_cli socksAddr_proposal=
 
   let pair ()=
     let buf= Bytes.create udp_bufsize in
-    let flowIn= ref 0
-    and flowOut= ref 0 in
+    let flowIn= ref 0.
+    and flowOut= ref 0. in
     let rec pair remotes=
       let%lwt (len, peername)=
         Lwt_unix.recvfrom sock_udp buf 0 udp_bufsize []
@@ -248,14 +248,14 @@ let udp_relay ps sock_cli socksAddr_proposal=
       if !limit.addr = peerAddr.addr then
         (* from client *)
         begin
-          flowOut:= !flowOut + String.length data;
+          flowOut:= !flowOut +. Float.of_int (String.length data);
           let%lwt remotes= from_client () in
           pair remotes
         end
       else
         (* from remote *)
         begin
-          flowIn:= !flowIn + String.length data;
+          flowIn:= !flowIn +. Float.of_int (String.length data);
           begin%lwts
             from_remote ();
             pair remotes
@@ -398,5 +398,5 @@ let handshake ?timeout
     with
     | Msg.Rep AddressTypeNotSupported-> atyp_notSupported ps sock
   else
-    return (0, 0)
+    return (0., 0.)
 
