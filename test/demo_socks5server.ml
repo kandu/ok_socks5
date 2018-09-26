@@ -33,7 +33,7 @@ let s f=
 
 let f sock peername=
   let%lwt (flowIn, flowOut)= Server.handshake (sock, peername) in
-  Lwt_io.printf "%s: %d, %d\n"
+  Lwt_io.printf "%s: %f, %f\n"
     (Unix.sexp_of_sockaddr peername |> pp_sexp_hum)
     flowIn
     flowOut
