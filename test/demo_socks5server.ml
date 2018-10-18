@@ -8,10 +8,10 @@ let pp_sexp_hum= Format.asprintf "%a" Sexplib.Sexp.pp_hum
 
 let listen server f=
   let rec wait sock=
-    let%lwt (fd, peername)= Lwt_unix.accept sock in
+    let%lwt (fd, _)= Lwt_unix.accept sock in
     ignore_result @@
       (try%lwt
-        f fd peername;
+        f fd;
       with e-> Lwt_io.eprintl (Exn.to_string_mach e))
       [%lwt.finally force_close fd];
     wait sock
@@ -31,10 +31,10 @@ let s f=
     end
   end
 
-let f sock peername=
-  let%lwt (flowIn, flowOut)= Server.handshake (sock, peername) in
+let f sock=
+  let%lwt (flowIn, flowOut)= Server.handshake sock in
   Lwt_io.printf "%s: %f, %f\n"
-    (Unix.sexp_of_sockaddr peername |> pp_sexp_hum)
+    (Unix.sexp_of_sockaddr (Lwt_unix.getpeername sock) |> pp_sexp_hum)
     flowIn
     flowOut
 

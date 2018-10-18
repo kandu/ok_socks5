@@ -8,10 +8,10 @@ let pp_sexp_hum= Format.asprintf "%a" Sexplib.Sexp.pp_hum
 
 let listen server f=
   let rec wait sock=
-    let%lwt (fd, peername)= Lwt_unix.accept sock in
+    let%lwt (fd, _)= Lwt_unix.accept sock in
     ignore_result @@
       (try%lwt
-        f fd peername;
+        f fd;
       with e-> Lwt_io.eprintl (Exn.to_string_mach e))
       [%lwt.finally force_close fd];
     wait sock
@@ -38,12 +38,12 @@ let (forward_stream: Server.forward_stream)= {
   socks5= Caml.Unix.(ADDR_INET (inet_addr_loopback, 9667));
 }
 
-let f sock peername=
+let f sock=
   let%lwt (flowIn, flowOut)= Server.handshake
     ~connect:(Server.connect ~forward:forward_stream)
-    (sock, peername) in
+    sock in
   Lwt_io.printf "%s: %f, %f\n"
-    (Unix.sexp_of_sockaddr peername |> pp_sexp_hum)
+    (Unix.sexp_of_sockaddr (Lwt_unix.getpeername sock) |> pp_sexp_hum)
     flowIn
     flowOut
 

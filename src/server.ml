@@ -378,7 +378,7 @@ let handshake ?timeout
   ?(connect= connect ?forward:None)
   ?(bind= bind ?forward:None)
   ?(udp= udp ?forward:None)
-  ((sock, sockaddr):Lwt_unix.file_descr * Lwt_unix.sockaddr)
+  sock
   =
   let ps= Common.initState (Common.Fd sock) in
   let%lwt r= MsgParser.p_method_req ps in
