@@ -112,7 +112,7 @@ let udp_init ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
 
 let udp_unpack datagram=
   let%lwt r= Parsec.parse_string MsgParser.p_udp_datagram datagram in
-  let%m[@PL] ((frag, addr, data), ps)= r in
+  let%m[@PL] ((frag, addr, data), _ps)= r in
   if frag = 0 then
     return (Some (addr, data))
   else
@@ -126,7 +126,7 @@ let udp_recvfrom sock=
   let bufsize= Int.pow 2 16 in
   let buf= Bytes.create bufsize in
   let rec recv flags=
-    let%lwt (len, remoteAddr)=
+    let%lwt (len, _remoteAddr)=
       Lwt_unix.recvfrom sock buf 0 bufsize flags
     in
     let datagram= Caml.Bytes.sub buf 0 len |> Caml.Bytes.to_string in
@@ -151,7 +151,7 @@ let udp_sendto sock relay=
 
 let udp ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
   ~socks5 ~proposal ~local ()=
-  let%lwt (sock_relay, addr, ps)=
+  let%lwt (sock_relay, addr, _ps)=
     udp_init ?timeout ~methods ~auth ~socks5 ~proposal () in
 
   let domain= Unix.domain_of_sockaddr local in

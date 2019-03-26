@@ -1,14 +1,14 @@
-open Core_kernel.Std [@@ocaml.warning "-3"]
+open Core_kernel
 open Lwt
 open Common
 open Ok_parsec
 open Watchdog
 
 
-module IASet= Core.Std.Unix.Inet_addr.Set [@@ocaml.warning "-3"]
+module IASet= Core.Unix.Inet_addr.Set
 
 
-let cmd_notSupported ps sock_cli=
+let cmd_notSupported _ps sock_cli=
   begin%lwts
     fd_write_string sock_cli
       Msg.(request_rep CommandNotSupported anyAddr4)
@@ -16,7 +16,7 @@ let cmd_notSupported ps sock_cli=
     Lwt.return (0., 0.);
   end
 
-let atyp_notSupported ps sock_cli=
+let atyp_notSupported _ps sock_cli=
   begin%lwts
     fd_write_string sock_cli
       Msg.(request_rep AddressTypeNotSupported anyAddr4)
@@ -25,7 +25,7 @@ let atyp_notSupported ps sock_cli=
   end
 
 let repError rep=
-  fun ps sock_cli->
+  fun _ps sock_cli->
     begin%lwts
       fd_write_string sock_cli
         Msg.(request_rep rep anyAddr4)
@@ -70,7 +70,7 @@ let connect ?timeout ?connRules ?(forward:forward_stream option)
   match%lwt
     (match forward with
     | Some forward->
-      let%lwt (fwd, fwd_addr, ps)= Client.connect
+      let%lwt (fwd, _fwd_addr, _ps)= Client.connect
         ?timeout:forward.timeout
         ?methods:forward.methods
         ?auth:forward.auth
@@ -93,11 +93,11 @@ let connect ?timeout ?connRules ?(forward:forward_stream option)
     hostUnreachable ps sock_cli
   | exception Msg.Rep ConnectionNotAllowed->
     connectionNotAllowed ps sock_cli
-  | exception Unix.Unix_error (ETIMEDOUT, f, p)->
+  | exception Unix.Unix_error (ETIMEDOUT, _f, _p)->
     hostUnreachable ps sock_cli
-  | exception Unix.Unix_error (ENETUNREACH, f, p)->
+  | exception Unix.Unix_error (ENETUNREACH, _f, _p)->
     hostUnreachable ps sock_cli
-  | exception Unix.Unix_error (ECONNREFUSED, f, p)->
+  | exception Unix.Unix_error (ECONNREFUSED, _f, _p)->
     connectionRefused ps sock_cli
   | exception Msg.Rep NetworkUnreachable->
     networkUnreachable ps sock_cli
@@ -112,7 +112,7 @@ let bind ?timeout ?(forward:forward_stream option) ps sock_cli dst=
   in
   match forward with
   | Some forward->
-    let%lwt (fwd, sock_s, sock_c, ps)= Client.bind
+    let%lwt (fwd, _sock_s, sock_c, ps)= Client.bind
       ?timeout:forward.timeout
       ?methods:forward.methods
       ?auth:forward.auth
@@ -158,7 +158,7 @@ let bind ?timeout ?(forward:forward_stream option) ps sock_cli dst=
     [%lwt.finally force_close sock_listen]
 
 
-let udp_relay ps sock_cli socksAddr_proposal=
+let udp_relay _ps sock_cli socksAddr_proposal=
   let%lwt addr_proposal= resolv_addr socksAddr_proposal in
   let addr_cli= Lwt_unix.getpeername sock_cli in
 
@@ -204,7 +204,7 @@ let udp_relay ps sock_cli socksAddr_proposal=
             let%m[@PL] ((frag, addr, data), r)= msg in
             return ((frag, addr, data), r)
           with
-          | ((frag, addr, data), r)->
+          | ((frag, addr, data), _r)->
             if frag <> 0 then
               return remotes
             else
@@ -282,7 +282,7 @@ let udp_relay ps sock_cli socksAddr_proposal=
   [%lwt.finally force_close sock_udp]
 
 
-let udp_forward ~(forward:forward_dgram) ps sock_cli socksAddr_proposal=
+let udp_forward ~(forward:forward_dgram) _ps sock_cli socksAddr_proposal=
   let%lwt addr_proposal= resolv_addr socksAddr_proposal in
   let addr_cli= Lwt_unix.getpeername sock_cli in
 
@@ -294,7 +294,7 @@ let udp_forward ~(forward:forward_dgram) ps sock_cli socksAddr_proposal=
   let limit_addr= ref (socksAddr_to_sockaddr !limit) in
   let domain= Unix.domain_of_sockaddr addr_cli in
 
-  let%lwt (sock_socks5, addr, ps)=
+  let%lwt (_sock_socks5, addr, _ps)=
     Client.udp_init
     ?timeout:forward.timeout
     ?methods:forward.methods
@@ -311,7 +311,7 @@ let udp_forward ~(forward:forward_dgram) ps sock_cli socksAddr_proposal=
     else
       ADDR_INET (Unix.inet_addr_any, 0)
   in
-  let%lwt relay_sockname=
+  let%lwt _relay_sockname=
     begin%lwts
       Lwt_unix.bind sock_relay addr_udp;
       return (Lwt_unix.getsockname sock_udp);

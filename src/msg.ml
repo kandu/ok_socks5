@@ -94,7 +94,7 @@ let get_port_of_addr addr=
 
 let addr_of_sockaddr sa=
   match sa with
-  | Unix.ADDR_UNIX dm-> failwith "unix domain is not supported"
+  | Unix.ADDR_UNIX _dm-> failwith "unix domain is not supported"
   | Unix.ADDR_INET (ia, port)->
     match Unix.domain_of_sockaddr sa with
     | Unix.PF_INET-> Ipv4 (ia, port)

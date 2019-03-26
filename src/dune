@@ -1,0 +1,8 @@
+(library
+ (name ok_socks5)
+ (public_name ok_socks5)
+ (flags :standard -safe-string)
+ (synopsis "implementation of socks5 protocol")
+ (libraries core ok_parsec lwt.unix ctypes.foreign ppx_deriving.runtime)
+ (preprocess
+  (pps lwt_ppx ppx_ok_lwt ppx_ok_monad ppx_deriving.std)))

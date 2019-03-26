@@ -1,5 +1,4 @@
-open Core.Std [@@ocaml.warning "-3"]
-open Fn
+open Core
 open Lwt
 open Ok_socks5
 open Common
