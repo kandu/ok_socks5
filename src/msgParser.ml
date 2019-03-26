@@ -1,5 +1,4 @@
-open Core_kernel.Std [@@ocaml.warning "-3"]
-open Fn
+open Core_kernel
 open Ok_parsec
 open Parsec
 open Msg

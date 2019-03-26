@@ -3,16 +3,16 @@ PROJECT= ok_socks5
 .PHONY: build, install test demo clean
 
 build:
-	jbuilder build
+	dune build
 
 install: build
-	jbuilder install
+	dune install
 
 uninstall: build
-	jbuilder uninstall
+	dune uninstall
 
 test:
-	jbuilder runtest
+	dune runtest
 
 demo_s: build
 	./_build/default/test/demo_s.exe
@@ -20,5 +20,5 @@ demo_s: build
 demo_f: build
 
 clean:
-	jbuilder clean
+	dune clean
 

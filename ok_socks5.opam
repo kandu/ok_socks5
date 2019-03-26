@@ -15,6 +15,6 @@ depends: [
   "lwt"
   "ppx_lwts"
   "ok_parsec"
-  "jbuilder" {build}
+  "dune" {build & >= "1.0"}
 ]
 available: [ocaml-version >= "4.02.3"]
