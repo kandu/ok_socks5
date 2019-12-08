@@ -173,7 +173,7 @@ let udp_relay _ps sock_cli socksAddr_proposal=
   let sock_udp= Lwt_unix.(socket domain SOCK_DGRAM 0) in
   (let addr_udp=
     let open Lwt_unix in
-    if domain = PF_INET6 then
+    if Poly.(=) domain PF_INET6 then
       ADDR_INET (Unix.inet6_addr_any, 0)
     else
       ADDR_INET (Unix.inet_addr_any, 0)
@@ -245,7 +245,7 @@ let udp_relay _ps sock_cli socksAddr_proposal=
           return ()
       in
 
-      if !limit.addr = peerAddr.addr then
+      if Poly.(=) !limit.addr peerAddr.addr then
         (* from client *)
         begin
           flowOut:= !flowOut +. Float.of_int (String.length data);
@@ -306,7 +306,7 @@ let udp_forward ~(forward:forward_dgram) _ps sock_cli socksAddr_proposal=
   let sock_udp= Lwt_unix.(socket domain SOCK_DGRAM 0) in
   (let addr_udp=
     let open Lwt_unix in
-    if domain = PF_INET6 then
+    if Poly.(=) domain PF_INET6 then
       ADDR_INET (Unix.inet6_addr_any, 0)
     else
       ADDR_INET (Unix.inet_addr_any, 0)
@@ -344,7 +344,7 @@ let udp_forward ~(forward:forward_dgram) _ps sock_cli socksAddr_proposal=
           return peername;
         end
     in
-    pairDgram ~filter1:((=) udp_peername) (sock_udp, udp_peername) (sock_relay, relay_peername)
+    pairDgram ~filter1:(Poly.(=) udp_peername) (sock_udp, udp_peername) (sock_relay, relay_peername)
   in
 
   begin%lwts

@@ -1,4 +1,4 @@
-open Core_kernel.Std [@@ocaml.warning "-3"]
+open Core_kernel
 open Lwt
 open Common
 open Ok_parsec
@@ -45,7 +45,7 @@ let streamCommon ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps
           >|= ignore;
         let%lwt r= MsgParser.p_request_rep ps in
         let%m[@PL] ((rep, addr), ps)= r in
-        if rep = Msg.Succeeded then
+        if Poly.(=) rep Msg.Succeeded then
           return (sock, addr, ps)
         else
           Lwt.fail_with (Msg.show_rep rep)
@@ -70,7 +70,7 @@ let bind ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
     notifier addr_s;
     let%lwt r= MsgParser.p_request_rep ps in
     let%m[@PL] ((rep, addr_c), ps)= r in
-    if rep = Msg.Succeeded then
+    if Poly.(=) rep Msg.Succeeded then
       return (sock, addr_s, addr_c, ps)
     else
       Lwt.fail_with (Msg.show_rep rep)
@@ -98,7 +98,7 @@ let udp_init ?timeout ?(methods=[Msg.NoAuth]) ?(auth= fun _ ps _-> return ps)
           >|= ignore;
         let%lwt r= MsgParser.p_request_rep ps in
         let%m[@PL] ((rep, addr), ps)= r in
-        if rep = Msg.Succeeded then
+        if (Poly.(=)) rep Msg.Succeeded then
           return (sock, addr, ps)
         else
           Lwt.fail_with (Msg.show_rep rep)
